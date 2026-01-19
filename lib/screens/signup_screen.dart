@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../services/supabase_service.dart';
+import 'login_screen.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -9,15 +11,14 @@ class SignupScreen extends StatefulWidget {
 
 class _SignupScreenState extends State<SignupScreen> {
   final _formKey = GlobalKey<FormState>();
-
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _phoneController = TextEditingController();
-
   String? _selectedCountry;
 
-  // Example country list
+  final SupabaseService _supabaseService = SupabaseService();
+
   final List<String> _countries = [
     "Bangladesh",
     "India",
@@ -29,6 +30,8 @@ class _SignupScreenState extends State<SignupScreen> {
     "France",
     "Japan",
   ];
+
+  bool _loading = false;
 
   @override
   Widget build(BuildContext context) {
@@ -43,7 +46,6 @@ class _SignupScreenState extends State<SignupScreen> {
           key: _formKey,
           child: Column(
             children: [
-              // Full Name
               _buildInputField(
                 controller: _nameController,
                 hint: "Full Name",
@@ -53,17 +55,13 @@ class _SignupScreenState extends State<SignupScreen> {
                 value == null || value.isEmpty ? "Enter your name" : null,
               ),
               const SizedBox(height: 15),
-
-              // Email
               _buildInputField(
                 controller: _emailController,
                 hint: "Email Address",
                 icon: Icons.email,
                 obscure: false,
                 validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return "Enter your email";
-                  }
+                  if (value == null || value.isEmpty) return "Enter your email";
                   if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(value)) {
                     return "Enter a valid email";
                   }
@@ -71,8 +69,6 @@ class _SignupScreenState extends State<SignupScreen> {
                 },
               ),
               const SizedBox(height: 15),
-
-              // Password
               _buildInputField(
                 controller: _passwordController,
                 hint: "Password",
@@ -82,9 +78,7 @@ class _SignupScreenState extends State<SignupScreen> {
                   if (value == null || value.isEmpty) {
                     return "Enter a password";
                   }
-                  if (value.length < 8) {
-                    return "Password must be at least 8 characters";
-                  }
+                  if (value.length < 8) return "Password must be 8+ chars";
                   if (!RegExp(r'^(?=.*[A-Z])(?=.*\d)').hasMatch(value)) {
                     return "Must contain 1 uppercase & 1 number";
                   }
@@ -92,26 +86,20 @@ class _SignupScreenState extends State<SignupScreen> {
                 },
               ),
               const SizedBox(height: 15),
-
-              // Phone Number
               _buildInputField(
                 controller: _phoneController,
                 hint: "Phone Number (+880123456789)",
                 icon: Icons.phone,
                 obscure: false,
                 validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return "Enter your phone number";
-                  }
+                  if (value == null || value.isEmpty) return "Enter phone";
                   if (!RegExp(r'^\+\d{7,15}$').hasMatch(value)) {
-                    return "Enter with country code (e.g., +880...)";
+                    return "Enter valid number (+880...)";
                   }
                   return null;
                 },
               ),
               const SizedBox(height: 15),
-
-              // Country Dropdown
               DropdownButtonFormField<String>(
                 decoration: InputDecoration(
                   filled: true,
@@ -124,43 +112,63 @@ class _SignupScreenState extends State<SignupScreen> {
                 ),
                 hint: const Text("Select Country / Region"),
                 value: _selectedCountry,
-                onChanged: (value) {
-                  setState(() {
-                    _selectedCountry = value;
-                  });
-                },
+                onChanged: (value) => setState(() => _selectedCountry = value),
                 validator: (value) =>
                 value == null ? "Select your country" : null,
                 items: _countries
-                    .map((country) =>
-                    DropdownMenuItem(value: country, child: Text(country)))
+                    .map((c) =>
+                    DropdownMenuItem(value: c, child: Text(c)))
                     .toList(),
               ),
               const SizedBox(height: 30),
-
-              // Sign Up Button
               ElevatedButton(
+                onPressed: _loading
+                    ? null
+                    : () async {
+                  if (!_formKey.currentState!.validate()) return;
+
+                  setState(() => _loading = true);
+
+                  try {
+                    await _supabaseService.signUpTraveler(
+                      email: _emailController.text.trim(),
+                      password: _passwordController.text.trim(),
+                      name: _nameController.text.trim(),
+                      phone: _phoneController.text.trim(),
+                      country: _selectedCountry!,
+                    );
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                            "Signup successful. Please check your email."),
+                      ),
+                    );
+
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => const LoginScreen()),
+                    );
+                  } catch (e) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(e.toString())),
+                    );
+                  } finally {
+                    setState(() => _loading = false);
+                  }
+                },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF0077b6),
                   foregroundColor: Colors.white,
                   minimumSize: const Size(double.infinity, 50),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
                 ),
-                onPressed: () {
-                  if (_formKey.currentState!.validate()) {
-                    // TODO: Call backend signup logic here
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text("Form submitted successfully!"),
-                      ),
-                    );
-                  }
-                },
-                child: const Text(
+                child: _loading
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Text(
                   "Sign Up",
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.bold),
                 ),
               ),
             ],
