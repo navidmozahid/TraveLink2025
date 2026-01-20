@@ -5,45 +5,38 @@ class CommentService {
   final supabase = Supabase.instance.client;
   final NotificationService _notificationService = NotificationService();
 
-  // ---------------- FETCH COMMENTS (SAFE + PROFILES) ----------------
-  Future<List<Map<String, dynamic>>> fetchComments(String postId) async {
-    // 1️⃣ fetch comments
-    final comments = await supabase
+  // ================= STREAM COMMENTS (REALTIME + PROFILES) =================
+  Stream<List<Map<String, dynamic>>> streamComments(String postId) {
+    return supabase
         .from('comments')
-        .select()
+        .stream(primaryKey: ['id'])
         .eq('post_id', postId)
-        .order('created_at');
+        .order('created_at')
+        .asyncMap((comments) async {
+      if (comments.isEmpty) return [];
 
-    if (comments.isEmpty) return [];
+      final userIds =
+      comments.map((c) => c['user_id'] as String).toSet().toList();
 
-    // 2️⃣ collect user ids
-    final userIds = <String>{};
-    for (final c in comments) {
-      userIds.add(c['user_id']);
-    }
+      final profiles = await supabase
+          .from('profiles')
+          .select('id, name, avatar_url')
+          .inFilter('id', userIds);
 
-    // 3️⃣ fetch profiles
-    final profiles = await supabase
-        .from('profiles')
-        .select('id, name, avatar_url')
-        .inFilter('id', userIds.toList());
-
-    // 4️⃣ map profiles
-    final Map<String, Map<String, dynamic>> profileMap = {};
-    for (final p in profiles) {
-      profileMap[p['id']] = p;
-    }
-
-    // 5️⃣ merge
-    return comments.map<Map<String, dynamic>>((c) {
-      return {
-        ...c,
-        'profiles': profileMap[c['user_id']],
+      final profileMap = {
+        for (final p in profiles) p['id']: p,
       };
-    }).toList();
+
+      return comments.map((c) {
+        return {
+          ...c,
+          'profiles': profileMap[c['user_id']],
+        };
+      }).toList();
+    });
   }
 
-  // ---------------- ADD COMMENT / REPLY ----------------
+  // ================= ADD COMMENT / REPLY =================
   Future<void> addComment({
     required String postId,
     required String content,
@@ -52,7 +45,6 @@ class CommentService {
     final user = supabase.auth.currentUser;
     if (user == null) return;
 
-    // 1️⃣ insert comment
     final inserted = await supabase
         .from('comments')
         .insert({
@@ -66,7 +58,6 @@ class CommentService {
 
     if (inserted == null) return;
 
-    // 2️⃣ get post owner
     final post = await supabase
         .from('posts')
         .select('user_id')
@@ -74,10 +65,9 @@ class CommentService {
         .maybeSingle();
 
     if (post == null) return;
+    final postOwnerId = post['user_id'];
 
-    final String postOwnerId = post['user_id'];
-
-    // 3️⃣ notify post owner (not self)
+    // 🔔 notify post owner
     if (postOwnerId != user.id) {
       await _notificationService.createNotification(
         userId: postOwnerId,
@@ -87,7 +77,7 @@ class CommentService {
       );
     }
 
-    // 4️⃣ reply notification
+    // 🔔 notify replied comment owner
     if (parentId != null) {
       final parent = await supabase
           .from('comments')
@@ -108,29 +98,45 @@ class CommentService {
     }
   }
 
-  // ---------------- COMMENT COUNT ----------------
-  Future<int> countComments(String postId) async {
-    final response = await supabase
-        .from('comments')
-        .select('id')
-        .eq('post_id', postId);
-
-    return response.length;
+  // ================= COMMENT LIKES =================
+  Stream<List<Map<String, dynamic>>> streamCommentLikes(String commentId) {
+    return supabase
+        .from('comment_likes')
+        .stream(primaryKey: ['id'])
+        .eq('comment_id', commentId);
   }
 
-  // ---------------- DELETE COMMENT ----------------
-  Future<void> deleteComment(String commentId) async {
+  Future<void> likeComment(String commentId) async {
+    final user = supabase.auth.currentUser;
+    if (user == null) return;
+
+    final exists = await supabase
+        .from('comment_likes')
+        .select('id')
+        .eq('comment_id', commentId)
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+    if (exists != null) return;
+
+    await supabase.from('comment_likes').insert({
+      'comment_id': commentId,
+      'user_id': user.id,
+    });
+  }
+
+  Future<void> unlikeComment(String commentId) async {
     final user = supabase.auth.currentUser;
     if (user == null) return;
 
     await supabase
-        .from('comments')
+        .from('comment_likes')
         .delete()
-        .eq('id', commentId)
+        .eq('comment_id', commentId)
         .eq('user_id', user.id);
   }
 
-  // ---------------- UPDATE COMMENT ----------------
+  // ================= UPDATE COMMENT =================
   Future<void> updateComment({
     required String commentId,
     required String content,
@@ -143,5 +149,52 @@ class CommentService {
         .update({'content': content})
         .eq('id', commentId)
         .eq('user_id', user.id);
+  }
+
+  // ================= DELETE COMMENT =================
+  // ✅ comment owner OR post owner
+  Future<void> deleteComment(String commentId) async {
+    final user = supabase.auth.currentUser;
+    if (user == null) return;
+
+    final comment = await supabase
+        .from('comments')
+        .select('user_id, post_id')
+        .eq('id', commentId)
+        .maybeSingle();
+
+    if (comment == null) return;
+
+    final post = await supabase
+        .from('posts')
+        .select('user_id')
+        .eq('id', comment['post_id'])
+        .maybeSingle();
+
+    final isCommentOwner = comment['user_id'] == user.id;
+    final isPostOwner = post != null && post['user_id'] == user.id;
+
+    if (isCommentOwner || isPostOwner) {
+      await supabase.from('comments').delete().eq('id', commentId);
+    }
+  }
+
+  // ================= COMMENT COUNT (FIXES YOUR ERROR) =================
+  Future<int> countComments(String postId) async {
+    final data = await supabase
+        .from('comments')
+        .select('id')
+        .eq('post_id', postId);
+
+    return data.length;
+  }
+
+  // ================= REALTIME COMMENT COUNT (OPTIONAL) =================
+  Stream<int> streamCommentCount(String postId) {
+    return supabase
+        .from('comments')
+        .stream(primaryKey: ['id'])
+        .eq('post_id', postId)
+        .map((rows) => rows.length);
   }
 }

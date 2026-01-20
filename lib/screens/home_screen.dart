@@ -75,10 +75,8 @@ class _HomeScreenState extends State<HomeScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const SizedBox(height: 12),
-            const Text(
-              "Settings",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
+            const Text("Settings",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const Divider(),
             ListTile(
               leading: const Icon(Icons.logout, color: Colors.red),
@@ -95,19 +93,13 @@ class _HomeScreenState extends State<HomeScreen> {
   // ---------------- REALTIME NOTIFICATION COUNT ----------------
   Stream<int> _unreadNotificationCount() {
     final user = _supabase.auth.currentUser;
-    if (user == null) {
-      return const Stream.empty();
-    }
+    if (user == null) return const Stream.empty();
 
     return _supabase
         .from('notifications')
         .stream(primaryKey: ['id'])
-        .map((rows) {
-      final unread = rows.where((n) =>
-      n['user_id'] == user.id &&
-          n['is_read'] == false);
-      return unread.length;
-    });
+        .map((rows) =>
+    rows.where((n) => n['user_id'] == user.id && n['is_read'] == false).length);
   }
 
   // ---------------- POST CARD ----------------
@@ -133,18 +125,16 @@ class _HomeScreenState extends State<HomeScreen> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) =>
-                          OtherProfileScreen(userId: post['user_id']),
+                      builder: (_) => OtherProfileScreen(userId: post['user_id']),
                     ),
                   );
                 }
               },
               child: CircleAvatar(
-                backgroundColor: Colors.grey,
                 backgroundImage:
                 avatarUrl != null ? NetworkImage(avatarUrl) : null,
                 child: avatarUrl == null
-                    ? const Icon(Icons.person, color: Colors.white)
+                    ? const Icon(Icons.person)
                     : null,
               ),
             ),
@@ -154,16 +144,13 @@ class _HomeScreenState extends State<HomeScreen> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) =>
-                          OtherProfileScreen(userId: post['user_id']),
+                      builder: (_) => OtherProfileScreen(userId: post['user_id']),
                     ),
                   );
                 }
               },
-              child: Text(
-                userName,
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
+              child: Text(userName,
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
             ),
             subtitle: Text(post['location'] ?? ''),
             trailing: isMyPost
@@ -191,10 +178,7 @@ class _HomeScreenState extends State<HomeScreen> {
           // ---------- IMAGE ----------
           AspectRatio(
             aspectRatio: 1,
-            child: Image.network(
-              post['media_url'],
-              fit: BoxFit.cover,
-            ),
+            child: Image.network(post['media_url'], fit: BoxFit.cover),
           ),
 
           // ---------- ACTIONS ----------
@@ -202,18 +186,14 @@ class _HomeScreenState extends State<HomeScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 8),
             child: Row(
               children: [
-                // ❤️ REALTIME LIKES
+                // ❤️ REALTIME LIKES (FIXED)
                 StreamBuilder<List<Map<String, dynamic>>>(
                   stream: _supabase
                       .from('likes')
                       .stream(primaryKey: ['id'])
-                      .where((rows) =>
-                      rows.any((r) => r['post_id'] == post['id'])),
+                      .eq('post_id', post['id']),
                   builder: (_, snap) {
-                    final likes = snap.data
-                        ?.where((l) => l['post_id'] == post['id'])
-                        .toList() ??
-                        [];
+                    final likes = snap.data ?? [];
                     final isLiked = likes.any(
                             (l) => l['user_id'] == currentUser?.id);
 
@@ -224,23 +204,16 @@ class _HomeScreenState extends State<HomeScreen> {
                             isLiked
                                 ? Icons.favorite
                                 : Icons.favorite_border,
-                            color:
-                            isLiked ? Colors.red : Colors.black,
+                            color: isLiked ? Colors.red : Colors.black,
                           ),
                           onPressed: () async {
                             isLiked
-                                ? await _likeService
-                                .unlikePost(post['id'])
-                                : await _likeService
-                                .likePost(post['id']);
+                                ? await _likeService.unlikePost(post['id'])
+                                : await _likeService.likePost(post['id']);
                           },
                         ),
                         if (likes.isNotEmpty)
-                          Text(
-                            likes.length.toString(),
-                            style: const TextStyle(
-                                fontWeight: FontWeight.w600),
-                          ),
+                          Text(likes.length.toString()),
                       ],
                     );
                   },
@@ -261,7 +234,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
 
                 const Spacer(),
-
                 IconButton(
                   icon: const Icon(Icons.bookmark_border),
                   onPressed: () {},
@@ -270,19 +242,21 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // ---------- COMMENT COUNT ----------
+          // ---------- REALTIME COMMENT COUNT (FIXED) ----------
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: FutureBuilder<int>(
-              future: _commentService.countComments(post['id']),
+            child: StreamBuilder<List<Map<String, dynamic>>>(
+              stream: _supabase
+                  .from('comments')
+                  .stream(primaryKey: ['id'])
+                  .eq('post_id', post['id']),
               builder: (_, snap) {
-                if (!snap.hasData || snap.data == 0) {
-                  return const SizedBox();
-                }
+                final count = snap.data?.length ?? 0;
+                if (count == 0) return const SizedBox();
                 return Text(
-                  "View ${snap.data} comments",
-                  style: const TextStyle(
-                      fontSize: 13, color: Colors.grey),
+                  "View $count comments",
+                  style:
+                  const TextStyle(fontSize: 13, color: Colors.grey),
                 );
               },
             ),
@@ -297,10 +271,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: const TextStyle(color: Colors.black),
                 children: [
                   TextSpan(
-                    text: '$userName ',
-                    style:
-                    const TextStyle(fontWeight: FontWeight.bold),
-                  ),
+                      text: '$userName ',
+                      style:
+                      const TextStyle(fontWeight: FontWeight.bold)),
                   TextSpan(text: post['caption'] ?? ''),
                 ],
               ),
@@ -341,13 +314,11 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: const Text("TraveLink"),
         actions: [
-          // 🔔 NOTIFICATIONS (HOME ONLY)
           if (_currentIndex == 0)
             StreamBuilder<int>(
               stream: _unreadNotificationCount(),
-              builder: (context, snapshot) {
-                final count = snapshot.data ?? 0;
-
+              builder: (_, snap) {
+                final count = snap.data ?? 0;
                 return Stack(
                   children: [
                     IconButton(
@@ -356,9 +327,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) =>
-                            const NotificationScreen(),
-                          ),
+                              builder: (_) =>
+                              const NotificationScreen()),
                         );
                       },
                     ),
@@ -366,19 +336,13 @@ class _HomeScreenState extends State<HomeScreen> {
                       Positioned(
                         right: 10,
                         top: 10,
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: const BoxDecoration(
-                            color: Colors.red,
-                            shape: BoxShape.circle,
-                          ),
+                        child: CircleAvatar(
+                          radius: 8,
+                          backgroundColor: Colors.red,
                           child: Text(
                             count.toString(),
                             style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                            ),
+                                color: Colors.white, fontSize: 10),
                           ),
                         ),
                       ),
@@ -386,8 +350,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 );
               },
             ),
-
-          // ⚙ SETTINGS (PROFILE ONLY)
           if (_currentIndex == 3)
             IconButton(
               icon: const Icon(Icons.settings),
@@ -402,8 +364,7 @@ class _HomeScreenState extends State<HomeScreen> {
           await Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => const CreatePostScreen(),
-            ),
+                builder: (_) => const CreatePostScreen()),
           );
           _loadPosts();
         },
@@ -413,10 +374,8 @@ class _HomeScreenState extends State<HomeScreen> {
         type: BottomNavigationBarType.fixed,
         onTap: (i) => setState(() => _currentIndex = i),
         items: const [
-          BottomNavigationBarItem(
-              icon: Icon(Icons.home), label: "Home"),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.search), label: "Search"),
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: "Home"),
+          BottomNavigationBarItem(icon: Icon(Icons.search), label: "Search"),
           BottomNavigationBarItem(
               icon: Icon(Icons.chat_bubble_outline),
               label: "Messages"),

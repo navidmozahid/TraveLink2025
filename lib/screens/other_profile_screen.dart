@@ -3,6 +3,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../services/post_service.dart';
 import '../services/follow_service.dart';
+import 'message_screen.dart';
+import 'post_detail_screen.dart';
 
 class OtherProfileScreen extends StatefulWidget {
   final String userId;
@@ -14,9 +16,9 @@ class OtherProfileScreen extends StatefulWidget {
 }
 
 class _OtherProfileScreenState extends State<OtherProfileScreen> {
-  final _supabase = Supabase.instance.client;
-  final _postService = PostService();
-  final _followService = FollowService();
+  final SupabaseClient _supabase = Supabase.instance.client;
+  final PostService _postService = PostService();
+  final FollowService _followService = FollowService();
 
   Map<String, dynamic>? _profile;
   List<Map<String, dynamic>> _posts = [];
@@ -26,6 +28,10 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
 
   bool _loading = true;
   bool _isFollowing = false;
+  bool _followLoading = false;
+
+  bool get isMyProfile =>
+      widget.userId == _supabase.auth.currentUser?.id;
 
   @override
   void initState() {
@@ -33,6 +39,7 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
     _loadAll();
   }
 
+  // ---------------- LOAD EVERYTHING ----------------
   Future<void> _loadAll() async {
     await Future.wait([
       _loadProfile(),
@@ -41,7 +48,9 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
       _checkFollowing(),
     ]);
 
-    setState(() => _loading = false);
+    if (mounted) {
+      setState(() => _loading = false);
+    }
   }
 
   // ---------------- PROFILE ----------------
@@ -66,20 +75,21 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
 
   // ---------------- FOLLOW COUNTS ----------------
   Future<void> _loadFollowCounts() async {
-    _followers =
-    await _followService.countFollowers(widget.userId);
-    _following =
-    await _followService.countFollowing(widget.userId);
+    _followers = await _followService.countFollowers(widget.userId);
+    _following = await _followService.countFollowing(widget.userId);
   }
 
   // ---------------- CHECK FOLLOW ----------------
   Future<void> _checkFollowing() async {
-    _isFollowing =
-    await _followService.isFollowing(widget.userId);
+    _isFollowing = await _followService.isFollowing(widget.userId);
   }
 
   // ---------------- TOGGLE FOLLOW ----------------
   Future<void> _toggleFollow() async {
+    if (_followLoading) return;
+
+    setState(() => _followLoading = true);
+
     if (_isFollowing) {
       await _followService.unfollowUser(widget.userId);
     } else {
@@ -89,7 +99,7 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
     await _loadFollowCounts();
     await _checkFollowing();
 
-    setState(() {});
+    setState(() => _followLoading = false);
   }
 
   @override
@@ -100,9 +110,9 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
       );
     }
 
-    final name = _profile?['name'] ?? 'Traveler';
-    final bio = _profile?['bio'] ?? '';
-    final avatar = _profile?['avatar_url'];
+    final String name = _profile?['name'] ?? 'Traveler';
+    final String bio = _profile?['bio'] ?? '';
+    final String? avatar = _profile?['avatar_url'];
 
     return Scaffold(
       appBar: AppBar(title: Text(name)),
@@ -125,18 +135,20 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
                 const SizedBox(width: 20),
                 Expanded(
                   child: Row(
-                    mainAxisAlignment:
-                    MainAxisAlignment.spaceAround,
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
                       _StatItem(
-                          title: 'Posts',
-                          value: _posts.length.toString()),
+                        title: 'Posts',
+                        value: _posts.length.toString(),
+                      ),
                       _StatItem(
-                          title: 'Followers',
-                          value: _followers.toString()),
+                        title: 'Followers',
+                        value: _followers.toString(),
+                      ),
                       _StatItem(
-                          title: 'Following',
-                          value: _following.toString()),
+                        title: 'Following',
+                        value: _following.toString(),
+                      ),
                     ],
                   ),
                 ),
@@ -149,7 +161,9 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
             Text(
               name,
               style: const TextStyle(
-                  fontWeight: FontWeight.bold, fontSize: 16),
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
             ),
 
             const SizedBox(height: 4),
@@ -160,15 +174,47 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
 
             const SizedBox(height: 12),
 
-            // ---------- FOLLOW BUTTON ----------
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _toggleFollow,
-                child:
-                Text(_isFollowing ? 'Following' : 'Follow'),
+            // ---------- FOLLOW + MESSAGE ----------
+            if (!isMyProfile)
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed:
+                      _followLoading ? null : _toggleFollow,
+                      child: _followLoading
+                          ? const SizedBox(
+                        height: 18,
+                        width: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                          : Text(
+                        _isFollowing ? 'Following' : 'Follow',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => MessageScreen(
+                              userId: widget.userId,
+                              userName: name,
+                            ),
+                          ),
+                        );
+                      },
+                      child: const Text("Message"),
+                    ),
+                  ),
+                ],
               ),
-            ),
 
             const SizedBox(height: 20),
             const Divider(),
@@ -181,8 +227,7 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
             )
                 : GridView.builder(
               shrinkWrap: true,
-              physics:
-              const NeverScrollableScrollPhysics(),
+              physics: const NeverScrollableScrollPhysics(),
               itemCount: _posts.length,
               gridDelegate:
               const SliverGridDelegateWithFixedCrossAxisCount(
@@ -190,9 +235,21 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
                 crossAxisSpacing: 2,
                 mainAxisSpacing: 2,
               ),
-              itemBuilder: (_, i) => Image.network(
-                _posts[i]['media_url'],
-                fit: BoxFit.cover,
+              itemBuilder: (_, i) => GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => PostDetailScreen(
+                        postId: _posts[i]['id'],
+                      ),
+                    ),
+                  );
+                },
+                child: Image.network(
+                  _posts[i]['media_url'],
+                  fit: BoxFit.cover,
+                ),
               ),
             ),
           ],
@@ -213,11 +270,17 @@ class _StatItem extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Text(value,
-            style: const TextStyle(
-                fontWeight: FontWeight.bold, fontSize: 16)),
-        Text(title,
-            style: const TextStyle(color: Colors.grey)),
+        Text(
+          value,
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+          ),
+        ),
+        Text(
+          title,
+          style: const TextStyle(color: Colors.grey),
+        ),
       ],
     );
   }
