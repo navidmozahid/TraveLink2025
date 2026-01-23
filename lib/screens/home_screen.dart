@@ -12,6 +12,7 @@ import '../services/post_service.dart';
 import '../services/follow_service.dart';
 import '../services/like_service.dart';
 import '../services/comment_service.dart';
+import '../widgets/feed_video_player.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -31,6 +32,9 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _loading = true;
   int _currentIndex = 0;
   List<Map<String, dynamic>> _posts = [];
+
+  final Map<String, int> _pageIndexes = {};
+  bool _isFeedMuted = true;
 
   @override
   void initState() {
@@ -75,8 +79,10 @@ class _HomeScreenState extends State<HomeScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const SizedBox(height: 12),
-            const Text("Settings",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const Text(
+              "Settings",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
             const Divider(),
             ListTile(
               leading: const Icon(Icons.logout, color: Colors.red),
@@ -98,8 +104,10 @@ class _HomeScreenState extends State<HomeScreen> {
     return _supabase
         .from('notifications')
         .stream(primaryKey: ['id'])
-        .map((rows) =>
-    rows.where((n) => n['user_id'] == user.id && n['is_read'] == false).length);
+        .map((rows) => rows
+        .where((n) =>
+    n['user_id'] == user.id && n['is_read'] == false)
+        .length);
   }
 
   // ---------------- POST CARD ----------------
@@ -110,6 +118,9 @@ class _HomeScreenState extends State<HomeScreen> {
     final String userName = profile?['name'] ?? 'Traveler';
     final String? avatarUrl = profile?['avatar_url'];
     final bool isMyPost = post['user_id'] == currentUser?.id;
+
+    final List mediaList = post['post_media'] ?? [];
+    final int activeIndex = _pageIndexes[post['id']] ?? 0;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 14),
@@ -125,7 +136,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => OtherProfileScreen(userId: post['user_id']),
+                      builder: (_) =>
+                          OtherProfileScreen(userId: post['user_id']),
                     ),
                   );
                 }
@@ -133,52 +145,108 @@ class _HomeScreenState extends State<HomeScreen> {
               child: CircleAvatar(
                 backgroundImage:
                 avatarUrl != null ? NetworkImage(avatarUrl) : null,
-                child: avatarUrl == null
-                    ? const Icon(Icons.person)
-                    : null,
+                child:
+                avatarUrl == null ? const Icon(Icons.person) : null,
               ),
             ),
-            title: GestureDetector(
-              onTap: () {
-                if (!isMyPost) {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => OtherProfileScreen(userId: post['user_id']),
-                    ),
-                  );
-                }
-              },
-              child: Text(userName,
-                  style: const TextStyle(fontWeight: FontWeight.bold)),
+            title: Text(
+              userName,
+              style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             subtitle: Text(post['location'] ?? ''),
-            trailing: isMyPost
+            trailing: isMyPost || currentUser == null
                 ? null
-                : FutureBuilder<bool>(
-              future: _followService.isFollowing(post['user_id']),
+                : StreamBuilder<List<Map<String, dynamic>>>(
+              stream: _supabase
+                  .from('follows')
+                  .stream(primaryKey: ['id']),
               builder: (_, snap) {
-                final isFollowing = snap.data ?? false;
+                final rows = snap.data ?? [];
+
+                final isFollowing = rows.any(
+                      (r) =>
+                  r['follower_id'] == currentUser.id &&
+                      r['following_id'] == post['user_id'],
+                );
+
                 return OutlinedButton(
-                  onPressed: () async {
+                  onPressed: () {
                     isFollowing
-                        ? await _followService
+                        ? _followService
                         .unfollowUser(post['user_id'])
-                        : await _followService
+                        : _followService
                         .followUser(post['user_id']);
-                    setState(() {});
                   },
-                  child:
-                  Text(isFollowing ? "Following" : "Follow"),
+                  child: Text(
+                      isFollowing ? "Following" : "Follow"),
                 );
               },
             ),
           ),
 
-          // ---------- IMAGE ----------
+          // ---------- MEDIA ----------
           AspectRatio(
             aspectRatio: 1,
-            child: Image.network(post['media_url'], fit: BoxFit.cover),
+            child: mediaList.isNotEmpty
+                ? Stack(
+              alignment: Alignment.bottomCenter,
+              children: [
+                PageView.builder(
+                  itemCount: mediaList.length,
+                  onPageChanged: (index) {
+                    setState(() {
+                      _pageIndexes[post['id']] = index;
+                    });
+                  },
+                  itemBuilder: (_, i) {
+                    final media = mediaList[i];
+
+                    if (media['media_type'] == 'video') {
+                      final bool isActive =
+                          activeIndex == i && _currentIndex == 0;
+
+                      return Stack(
+                        children: [
+                          FeedVideoPlayer(
+                            key: ValueKey(media['media_url']),
+                            videoUrl: media['media_url'],
+                          ),
+                        ],
+                      );
+                    }
+
+                    return Image.network(
+                      media['media_url'],
+                      fit: BoxFit.cover,
+                    );
+                  },
+                ),
+                Positioned(
+                  bottom: 8,
+                  child: Row(
+                    children: List.generate(
+                      mediaList.length,
+                          (i) => Container(
+                        margin: const EdgeInsets.symmetric(
+                            horizontal: 3),
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          color: i == activeIndex
+                              ? Colors.white
+                              : Colors.white54,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            )
+                : Image.network(
+              post['media_url'],
+              fit: BoxFit.cover,
+            ),
           ),
 
           // ---------- ACTIONS ----------
@@ -186,16 +254,21 @@ class _HomeScreenState extends State<HomeScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 8),
             child: Row(
               children: [
-                // ❤️ REALTIME LIKES (FIXED)
                 StreamBuilder<List<Map<String, dynamic>>>(
                   stream: _supabase
                       .from('likes')
-                      .stream(primaryKey: ['id'])
-                      .eq('post_id', post['id']),
+                      .stream(primaryKey: ['id']),
                   builder: (_, snap) {
                     final likes = snap.data ?? [];
-                    final isLiked = likes.any(
-                            (l) => l['user_id'] == currentUser?.id);
+
+                    final isLiked = currentUser != null &&
+                        likes.any((l) =>
+                        l['user_id'] == currentUser.id &&
+                            l['post_id'] == post['id']);
+
+                    final likeCount = likes
+                        .where((l) => l['post_id'] == post['id'])
+                        .length;
 
                     return Row(
                       children: [
@@ -204,22 +277,23 @@ class _HomeScreenState extends State<HomeScreen> {
                             isLiked
                                 ? Icons.favorite
                                 : Icons.favorite_border,
-                            color: isLiked ? Colors.red : Colors.black,
+                            color:
+                            isLiked ? Colors.red : Colors.black,
                           ),
-                          onPressed: () async {
+                          onPressed: () {
                             isLiked
-                                ? await _likeService.unlikePost(post['id'])
-                                : await _likeService.likePost(post['id']);
+                                ? _likeService
+                                .unlikePost(post['id'])
+                                : _likeService
+                                .likePost(post['id']);
                           },
                         ),
-                        if (likes.isNotEmpty)
-                          Text(likes.length.toString()),
+                        if (likeCount > 0)
+                          Text(likeCount.toString()),
                       ],
                     );
                   },
                 ),
-
-                // 💬 COMMENTS
                 IconButton(
                   icon: const Icon(Icons.comment_outlined),
                   onPressed: () {
@@ -232,7 +306,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     );
                   },
                 ),
-
                 const Spacer(),
                 IconButton(
                   icon: const Icon(Icons.bookmark_border),
@@ -242,21 +315,23 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // ---------- REALTIME COMMENT COUNT (FIXED) ----------
+          // ---------- COMMENT COUNT ----------
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: StreamBuilder<List<Map<String, dynamic>>>(
               stream: _supabase
                   .from('comments')
-                  .stream(primaryKey: ['id'])
-                  .eq('post_id', post['id']),
+                  .stream(primaryKey: ['id']),
               builder: (_, snap) {
-                final count = snap.data?.length ?? 0;
+                final count = (snap.data ?? [])
+                    .where((c) => c['post_id'] == post['id'])
+                    .length;
+
                 if (count == 0) return const SizedBox();
                 return Text(
                   "View $count comments",
-                  style:
-                  const TextStyle(fontSize: 13, color: Colors.grey),
+                  style: const TextStyle(
+                      fontSize: 13, color: Colors.grey),
                 );
               },
             ),
@@ -264,16 +339,17 @@ class _HomeScreenState extends State<HomeScreen> {
 
           // ---------- CAPTION ----------
           Padding(
-            padding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            padding: const EdgeInsets.symmetric(
+                horizontal: 12, vertical: 6),
             child: RichText(
               text: TextSpan(
                 style: const TextStyle(color: Colors.black),
                 children: [
                   TextSpan(
-                      text: '$userName ',
-                      style:
-                      const TextStyle(fontWeight: FontWeight.bold)),
+                    text: '$userName ',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold),
+                  ),
                   TextSpan(text: post['caption'] ?? ''),
                 ],
               ),
@@ -297,7 +373,7 @@ class _HomeScreenState extends State<HomeScreen> {
           itemBuilder: (_, i) => _buildPost(_posts[i]),
         );
       case 1:
-        return const Center(child: Text("Search"));
+        return const Center(child: Text("Explore"));
       case 2:
         return const Center(child: Text("Messages"));
       case 3:
@@ -327,8 +403,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                              builder: (_) =>
-                              const NotificationScreen()),
+                            builder: (_) =>
+                            const NotificationScreen(),
+                          ),
                         );
                       },
                     ),
@@ -342,7 +419,8 @@ class _HomeScreenState extends State<HomeScreen> {
                           child: Text(
                             count.toString(),
                             style: const TextStyle(
-                                color: Colors.white, fontSize: 10),
+                                color: Colors.white,
+                                fontSize: 10),
                           ),
                         ),
                       ),
@@ -364,7 +442,8 @@ class _HomeScreenState extends State<HomeScreen> {
           await Navigator.push(
             context,
             MaterialPageRoute(
-                builder: (_) => const CreatePostScreen()),
+              builder: (_) => const CreatePostScreen(),
+            ),
           );
           _loadPosts();
         },
@@ -374,8 +453,11 @@ class _HomeScreenState extends State<HomeScreen> {
         type: BottomNavigationBarType.fixed,
         onTap: (i) => setState(() => _currentIndex = i),
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: "Home"),
-          BottomNavigationBarItem(icon: Icon(Icons.search), label: "Search"),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.home), label: "Home"),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.explore_outlined),
+              label: "Explore"),
           BottomNavigationBarItem(
               icon: Icon(Icons.chat_bubble_outline),
               label: "Messages"),

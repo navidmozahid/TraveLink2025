@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../services/post_service.dart';
 import '../services/follow_service.dart';
 import 'message_screen.dart';
 import 'post_detail_screen.dart';
@@ -17,7 +16,6 @@ class OtherProfileScreen extends StatefulWidget {
 
 class _OtherProfileScreenState extends State<OtherProfileScreen> {
   final SupabaseClient _supabase = Supabase.instance.client;
-  final PostService _postService = PostService();
   final FollowService _followService = FollowService();
 
   Map<String, dynamic>? _profile;
@@ -39,7 +37,6 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
     _loadAll();
   }
 
-  // ---------------- LOAD EVERYTHING ----------------
   Future<void> _loadAll() async {
     await Future.wait([
       _loadProfile(),
@@ -48,12 +45,9 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
       _checkFollowing(),
     ]);
 
-    if (mounted) {
-      setState(() => _loading = false);
-    }
+    if (mounted) setState(() => _loading = false);
   }
 
-  // ---------------- PROFILE ----------------
   Future<void> _loadProfile() async {
     _profile = await _supabase
         .from('profiles')
@@ -62,29 +56,25 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
         .maybeSingle();
   }
 
-  // ---------------- POSTS ----------------
   Future<void> _loadPosts() async {
     final data = await _supabase
         .from('posts')
-        .select('id, media_url')
+        .select('id, media_url, post_media (media_url, media_type)')
         .eq('user_id', widget.userId)
         .order('created_at', ascending: false);
 
     _posts = List<Map<String, dynamic>>.from(data);
   }
 
-  // ---------------- FOLLOW COUNTS ----------------
   Future<void> _loadFollowCounts() async {
     _followers = await _followService.countFollowers(widget.userId);
     _following = await _followService.countFollowing(widget.userId);
   }
 
-  // ---------------- CHECK FOLLOW ----------------
   Future<void> _checkFollowing() async {
     _isFollowing = await _followService.isFollowing(widget.userId);
   }
 
-  // ---------------- TOGGLE FOLLOW ----------------
   Future<void> _toggleFollow() async {
     if (_followLoading) return;
 
@@ -121,7 +111,6 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ---------- HEADER ----------
             Row(
               children: [
                 CircleAvatar(
@@ -157,7 +146,6 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
 
             const SizedBox(height: 12),
 
-            // ---------- NAME ----------
             Text(
               name,
               style: const TextStyle(
@@ -166,15 +154,10 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
               ),
             ),
 
-            const SizedBox(height: 4),
-
-            // ---------- BIO ----------
-            if (bio.isNotEmpty)
-              Text(bio, style: const TextStyle(fontSize: 14)),
+            if (bio.isNotEmpty) Text(bio),
 
             const SizedBox(height: 12),
 
-            // ---------- FOLLOW + MESSAGE ----------
             if (!isMyProfile)
               Row(
                 children: [
@@ -182,18 +165,8 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
                     child: ElevatedButton(
                       onPressed:
                       _followLoading ? null : _toggleFollow,
-                      child: _followLoading
-                          ? const SizedBox(
-                        height: 18,
-                        width: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                          : Text(
-                        _isFollowing ? 'Following' : 'Follow',
-                      ),
+                      child:
+                      Text(_isFollowing ? 'Following' : 'Follow'),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -219,12 +192,9 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
             const SizedBox(height: 20),
             const Divider(),
 
-            // ---------- POSTS GRID ----------
+            // ---------- POSTS GRID (FIXED) ----------
             _posts.isEmpty
-                ? const Padding(
-              padding: EdgeInsets.all(20),
-              child: Center(child: Text('No posts')),
-            )
+                ? const Center(child: Text('No posts'))
                 : GridView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
@@ -235,22 +205,70 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
                 crossAxisSpacing: 2,
                 mainAxisSpacing: 2,
               ),
-              itemBuilder: (_, i) => GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => PostDetailScreen(
-                        postId: _posts[i]['id'],
+              itemBuilder: (_, i) {
+                final post = _posts[i];
+
+                final List<Map<String, dynamic>> media =
+                post['post_media'] != null
+                    ? List<Map<String, dynamic>>.from(
+                  post['post_media'],
+                )
+                    : [];
+
+                String? previewUrl;
+                bool isVideo = false;
+
+                if (media.isNotEmpty &&
+                    media.first['media_url'] != null) {
+                  previewUrl = media.first['media_url'];
+                  isVideo = media.first['media_type'] == 'video';
+                } else if (post['media_url'] != null) {
+                  previewUrl = post['media_url'];
+                }
+
+                if (previewUrl == null) {
+                  return Container(color: Colors.grey[300]);
+                }
+
+                return GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            PostDetailScreen(postId: post['id']),
                       ),
-                    ),
-                  );
-                },
-                child: Image.network(
-                  _posts[i]['media_url'],
-                  fit: BoxFit.cover,
-                ),
-              ),
+                    );
+                  },
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      // ✅ ONLY load images
+                      if (!isVideo)
+                        Image.network(
+                          previewUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                            color: Colors.grey[300],
+                          ),
+                        )
+                      else
+                        Container(
+                          color: Colors.black12,
+                        ),
+
+                      if (isVideo)
+                        const Center(
+                          child: Icon(
+                            Icons.play_circle_fill,
+                            color: Colors.white,
+                            size: 36,
+                          ),
+                        ),
+                    ],
+                  ),
+                );
+              },
             ),
           ],
         ),
@@ -259,12 +277,14 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
   }
 }
 
-// ---------------- STAT ITEM ----------------
 class _StatItem extends StatelessWidget {
   final String title;
   final String value;
 
-  const _StatItem({required this.title, required this.value});
+  const _StatItem({
+    required this.title,
+    required this.value,
+  });
 
   @override
   Widget build(BuildContext context) {

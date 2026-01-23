@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/comment_service.dart';
-import 'other_profile_screen.dart'; // ✅ ADD
+import 'other_profile_screen.dart';
 
 class CommentsScreen extends StatefulWidget {
   final String postId;
@@ -27,6 +27,7 @@ class _CommentsScreenState extends State<CommentsScreen> {
       appBar: AppBar(title: const Text("Comments")),
       body: Column(
         children: [
+          // ================= COMMENTS =================
           Expanded(
             child: StreamBuilder<List<Map<String, dynamic>>>(
               stream: _commentService.streamComments(widget.postId),
@@ -156,48 +157,38 @@ class _CommentsScreenState extends State<CommentsScreen> {
       ) {
     final isMyComment = c['user_id'] == currentUser?.id;
 
+    void openProfile() {
+      if (!isMyComment) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => OtherProfileScreen(
+              userId: c['user_id'], // ✅ always valid
+            ),
+          ),
+        );
+      }
+    }
+
     return ListTile(
-      // ✅ AVATAR CLICK
-      leading: GestureDetector(
-        onTap: () {
-          if (!isMyComment) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) =>
-                    OtherProfileScreen(userId: c['user_id']),
-              ),
-            );
-          }
-        },
+      leading: InkWell(
+        onTap: openProfile,
         child: CircleAvatar(
           backgroundImage: profile?['avatar_url'] != null
               ? NetworkImage(profile!['avatar_url'])
               : null,
-          child:
-          profile?['avatar_url'] == null ? const Icon(Icons.person) : null,
+          child: profile?['avatar_url'] == null
+              ? const Icon(Icons.person)
+              : null,
         ),
       ),
-
-      // ✅ NAME CLICK
-      title: GestureDetector(
-        onTap: () {
-          if (!isMyComment) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) =>
-                    OtherProfileScreen(userId: c['user_id']),
-              ),
-            );
-          }
-        },
+      title: InkWell(
+        onTap: openProfile,
         child: Text(
           profile?['name'] ?? 'User',
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
       ),
-
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -248,7 +239,7 @@ class _CommentsScreenState extends State<CommentsScreen> {
                 child: const Text("Reply"),
               ),
 
-              // ✏️ EDIT + 🗑 DELETE (OWNER ONLY)
+              // ✏️ EDIT / 🗑 DELETE
               if (isMyComment)
                 PopupMenuButton<String>(
                   onSelected: (value) {
@@ -264,14 +255,8 @@ class _CommentsScreenState extends State<CommentsScreen> {
                     }
                   },
                   itemBuilder: (_) => const [
-                    PopupMenuItem(
-                      value: 'edit',
-                      child: Text("Edit"),
-                    ),
-                    PopupMenuItem(
-                      value: 'delete',
-                      child: Text("Delete"),
-                    ),
+                    PopupMenuItem(value: 'edit', child: Text("Edit")),
+                    PopupMenuItem(value: 'delete', child: Text("Delete")),
                   ],
                 ),
             ],

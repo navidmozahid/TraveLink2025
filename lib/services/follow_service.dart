@@ -13,6 +13,16 @@ class FollowService {
     // prevent self follow
     if (user.id == userId) return;
 
+    // prevent duplicate follow
+    final existing = await supabase
+        .from('follows')
+        .select('id')
+        .eq('follower_id', user.id)
+        .eq('following_id', userId)
+        .maybeSingle();
+
+    if (existing != null) return;
+
     await supabase.from('follows').insert({
       'follower_id': user.id,
       'following_id': userId,
@@ -20,8 +30,8 @@ class FollowService {
 
     // 🔔 CREATE FOLLOW NOTIFICATION
     await _notificationService.createNotification(
-      userId: userId,        // receiver
-      actorId: user.id,      // who followed
+      userId: userId,     // receiver
+      actorId: user.id,   // sender
       type: 'follow',
     );
   }

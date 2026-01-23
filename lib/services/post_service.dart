@@ -8,7 +8,7 @@ class PostService {
 
   static const String _bucket = 'post-images';
 
-  // ---------------- UPLOAD MEDIA ----------------
+  // ================= UPLOAD SINGLE MEDIA =================
   Future<String> uploadMedia(File file) async {
     final user = supabase.auth.currentUser;
     if (user == null) {
@@ -27,16 +27,26 @@ class PostService {
     return supabase.storage.from(_bucket).getPublicUrl(path);
   }
 
-  // ---------------- CREATE POST ----------------
+  // ================= UPLOAD MULTIPLE MEDIA =================
+  Future<List<String>> uploadMultipleMedia(List<File> files) async {
+    final List<String> urls = [];
+
+    for (final file in files) {
+      final url = await uploadMedia(file);
+      urls.add(url);
+    }
+
+    return urls;
+  }
+
+  // ================= CREATE OLD POST (SINGLE MEDIA) =================
   Future<void> createPost({
     required String mediaUrl,
     required String caption,
     required String location,
   }) async {
     final user = supabase.auth.currentUser;
-    if (user == null) {
-      throw Exception('User not logged in');
-    }
+    if (user == null) throw Exception('User not logged in');
 
     await supabase.from('posts').insert({
       'user_id': user.id,
@@ -46,9 +56,47 @@ class PostService {
     });
   }
 
-  // ---------------- FETCH FEED POSTS ----------------
+  // ================= CREATE NEW POST (MULTIPLE MEDIA) =================
+  Future<void> createPostWithMultipleMedia({
+    required List<File> mediaFiles,
+    required String caption,
+    required String location,
+  }) async {
+    final user = supabase.auth.currentUser;
+    if (user == null) throw Exception('User not logged in');
+
+    // 1️⃣ Create post
+    final post = await supabase
+        .from('posts')
+        .insert({
+      'user_id': user.id,
+      'caption': caption,
+      'location': location,
+    })
+        .select()
+        .single();
+
+    final String postId = post['id'];
+
+    // 2️⃣ Upload media
+    final urls = await uploadMultipleMedia(mediaFiles);
+
+    // 3️⃣ Insert post_media
+    for (final url in urls) {
+      final isVideo = url.endsWith('.mp4') ||
+          url.endsWith('.mov') ||
+          url.endsWith('.avi');
+
+      await supabase.from('post_media').insert({
+        'post_id': postId,
+        'media_url': url,
+        'media_type': isVideo ? 'video' : 'image',
+      });
+    }
+  }
+
+  // ================= FETCH FEED POSTS =================
   Future<List<Map<String, dynamic>>> fetchPosts() async {
-    // 1️⃣ Fetch posts
     final posts = await supabase
         .from('posts')
         .select()
@@ -56,44 +104,68 @@ class PostService {
 
     if (posts.isEmpty) return [];
 
-    // 2️⃣ Extract user IDs
-    final userIds = <String>{};
-    for (final post in posts) {
-      userIds.add(post['user_id']);
-    }
+    final postIds = posts.map((p) => p['id']).toList();
+    final userIds = posts.map((p) => p['user_id']).toSet().toList();
 
-    // 3️⃣ Fetch profiles
     final profiles = await supabase
         .from('profiles')
         .select('id, name, avatar_url')
-        .inFilter('id', userIds.toList());
+        .inFilter('id', userIds);
 
-    // 4️⃣ Map profiles
-    final Map<String, Map<String, dynamic>> profileMap = {};
-    for (final p in profiles) {
-      profileMap[p['id']] = p;
+    final profileMap = {
+      for (final p in profiles) p['id']: p,
+    };
+
+    final media = await supabase
+        .from('post_media')
+        .select()
+        .inFilter('post_id', postIds);
+
+    final Map<String, List<Map<String, dynamic>>> mediaMap = {};
+    for (final m in media) {
+      mediaMap.putIfAbsent(m['post_id'], () => []).add(m);
     }
 
-    // 5️⃣ Merge posts + profiles
     return posts.map<Map<String, dynamic>>((post) {
       return {
         ...post,
         'profiles': profileMap[post['user_id']],
+        'post_media': mediaMap[post['id']] ?? [],
       };
     }).toList();
   }
 
-  // ---------------- FETCH MY POSTS (PROFILE) ----------------
+  // ================= FETCH MY POSTS (FIXED & FUTURE SAFE) =================
   Future<List<Map<String, dynamic>>> fetchMyPosts() async {
     final user = supabase.auth.currentUser;
     if (user == null) return [];
 
-    final response = await supabase
+    final posts = await supabase
         .from('posts')
         .select('id, media_url, created_at')
         .eq('user_id', user.id)
         .order('created_at', ascending: false);
 
-    return List<Map<String, dynamic>>.from(response);
+    if (posts.isEmpty) return [];
+
+    final postIds = posts.map((p) => p['id']).toList();
+
+    final media = await supabase
+        .from('post_media')
+        .select('post_id, media_url')
+        .inFilter('post_id', postIds);
+
+    final Map<String, String> previewMap = {};
+    for (final m in media) {
+      previewMap.putIfAbsent(m['post_id'], () => m['media_url']);
+    }
+
+    return posts.map<Map<String, dynamic>>((post) {
+      return {
+        ...post,
+        // ✅ fallback logic
+        'media_url': post['media_url'] ?? previewMap[post['id']],
+      };
+    }).toList();
   }
 }

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/post_service.dart';
+
 class CreatePostScreen extends StatefulWidget {
   const CreatePostScreen({super.key});
 
@@ -14,14 +16,14 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   final _captionController = TextEditingController();
   final _locationController = TextEditingController();
   final ImagePicker _picker = ImagePicker();
+  final PostService _postService = PostService();
 
-  File? _image;
+  List<File> _mediaFiles = [];
   bool _posting = false;
 
   Map<String, dynamic>? _profile;
 
-  bool get _canPost =>
-      _image != null && _captionController.text.trim().isNotEmpty;
+  bool get _canPost => _mediaFiles.isNotEmpty && !_posting;
 
   @override
   void initState() {
@@ -31,11 +33,10 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
   // ---------------- LOAD PROFILE ----------------
   Future<void> _loadProfile() async {
-    final supabase = Supabase.instance.client;
-    final user = supabase.auth.currentUser;
+    final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return;
 
-    final data = await supabase
+    final data = await Supabase.instance.client
         .from('profiles')
         .select()
         .eq('id', user.id)
@@ -44,13 +45,27 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     setState(() => _profile = data);
   }
 
-  // ---------------- PICK IMAGE ----------------
-  Future<void> _pickImage() async {
-    final picked =
-    await _picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+  // ---------------- PICK FROM GALLERY (MULTI) ----------------
+  Future<void> _pickFromGallery() async {
+    final picked = await _picker.pickMultipleMedia();
+    if (picked.isEmpty) return;
+
+    setState(() {
+      _mediaFiles.addAll(picked.map((e) => File(e.path)));
+    });
+  }
+
+  // ---------------- PICK FROM CAMERA (SINGLE IMAGE) ----------------
+  Future<void> _pickFromCamera() async {
+    final picked = await _picker.pickImage(
+      source: ImageSource.camera,
+      imageQuality: 85,
+    );
 
     if (picked != null) {
-      setState(() => _image = File(picked.path));
+      setState(() {
+        _mediaFiles.add(File(picked.path));
+      });
     }
   }
 
@@ -60,56 +75,38 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
     setState(() => _posting = true);
 
-    final supabase = Supabase.instance.client;
-    final user = supabase.auth.currentUser;
-    if (user == null) return;
-
     try {
-      // 1️⃣ Upload image to EXISTING bucket
-      final fileName =
-          '${user.id}/${DateTime.now().millisecondsSinceEpoch}.jpg';
-
-      await supabase.storage
-          .from('post-images') // ✅ MUST EXIST
-          .upload(fileName, _image!);
-
-      final imageUrl = supabase.storage
-          .from('post-images')
-          .getPublicUrl(fileName);
-
-      // 2️⃣ Insert post row
-      await supabase.from('posts').insert({
-        'user_id': user.id,
-        'caption': _captionController.text.trim(),
-        'location': _locationController.text.trim(),
-        'media_url': imageUrl,
-      });
+      await _postService.createPostWithMultipleMedia(
+        mediaFiles: _mediaFiles,
+        caption: _captionController.text.trim(),
+        location: _locationController.text.trim(),
+      );
 
       if (mounted) Navigator.pop(context, true);
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
     } finally {
-      setState(() => _posting = false);
+      if (mounted) setState(() => _posting = false);
     }
+  }
+
+  bool _isVideo(File file) {
+    final ext = file.path.toLowerCase();
+    return ext.endsWith('.mp4') ||
+        ext.endsWith('.mov') ||
+        ext.endsWith('.avi') ||
+        ext.endsWith('.mkv');
   }
 
   @override
   Widget build(BuildContext context) {
-    final String name =
-    (_profile?['name'] as String?)?.isNotEmpty == true
-        ? _profile!['name']
-        : 'User';
-
-    final String? avatarUrl = _profile?['avatar_url'];
+    final name = _profile?['name'] ?? 'User';
+    final avatarUrl = _profile?['avatar_url'];
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Create Post'),
         actions: [
           TextButton(
-            onPressed: _canPost && !_posting ? _createPost : null,
+            onPressed: _canPost ? _createPost : null,
             child: _posting
                 ? const SizedBox(
               height: 16,
@@ -138,10 +135,8 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                   avatarUrl == null ? const Icon(Icons.person) : null,
                 ),
                 const SizedBox(width: 10),
-                Text(
-                  name,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
+                Text(name,
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
               ],
             ),
 
@@ -150,34 +145,92 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
             // CAPTION
             TextField(
               controller: _captionController,
-              maxLines: null,
               decoration: const InputDecoration(
-                hintText: "What's on your mind?",
+                hintText: "Write a caption (optional)",
                 border: InputBorder.none,
               ),
-              onChanged: (_) => setState(() {}),
             ),
 
             const SizedBox(height: 16),
 
-            // IMAGE
-            GestureDetector(
-              onTap: _pickImage,
-              child: Container(
-                height: 200,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: Colors.grey[200],
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: _image == null
-                    ? const Center(
-                  child: Icon(Icons.photo_library, size: 40),
-                )
-                    : ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.file(_image!, fit: BoxFit.cover),
-                ),
+            // MEDIA PREVIEW (UPDATED ✅ REMOVE BUTTON)
+            SizedBox(
+              height: 200,
+              child: _mediaFiles.isEmpty
+                  ? const Center(child: Text("No media selected"))
+                  : ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: _mediaFiles.length,
+                itemBuilder: (_, i) {
+                  final file = _mediaFiles[i];
+                  final isVideo = _isVideo(file);
+
+                  return Padding(
+                    padding: const EdgeInsets.all(6),
+                    child: Stack(
+                      children: [
+                        Container(
+                          width: 160,
+                          decoration: BoxDecoration(
+                            color: Colors.black12,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: isVideo
+                              ? const Icon(
+                            Icons.videocam,
+                            size: 50,
+                            color: Colors.black54,
+                          )
+                              : ClipRRect(
+                            borderRadius:
+                            BorderRadius.circular(12),
+                            child: Image.file(
+                              file,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        ),
+
+                        // ▶ Video icon
+                        if (isVideo)
+                          const Positioned.fill(
+                            child: Center(
+                              child: Icon(
+                                Icons.play_circle_fill,
+                                size: 40,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+
+                        // ❌ REMOVE BUTTON
+                        Positioned(
+                          top: 6,
+                          right: 6,
+                          child: GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _mediaFiles.removeAt(i);
+                              });
+                            },
+                            child: Container(
+                              decoration: const BoxDecoration(
+                                color: Colors.black54,
+                                shape: BoxShape.circle,
+                              ),
+                              padding: const EdgeInsets.all(4),
+                              child: const Icon(
+                                Icons.close,
+                                size: 16,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
               ),
             ),
 
@@ -196,6 +249,25 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                   borderSide: BorderSide.none,
                 ),
               ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // PICK BUTTONS
+            Row(
+              children: [
+                ElevatedButton.icon(
+                  onPressed: _pickFromGallery,
+                  icon: const Icon(Icons.photo_library),
+                  label: const Text("Gallery"),
+                ),
+                const SizedBox(width: 10),
+                ElevatedButton.icon(
+                  onPressed: _pickFromCamera,
+                  icon: const Icon(Icons.camera_alt),
+                  label: const Text("Camera"),
+                ),
+              ],
             ),
           ],
         ),
