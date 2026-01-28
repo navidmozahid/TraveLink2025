@@ -7,12 +7,15 @@ import 'create_post_screen.dart';
 import 'comments_screen.dart';
 import 'other_profile_screen.dart';
 import 'notification_screen.dart';
+import 'post_detail_screen.dart'; // ✅ ADDED (needed)
+import 'inbox_screen.dart';
 
 import '../services/post_service.dart';
 import '../services/follow_service.dart';
 import '../services/like_service.dart';
 import '../services/comment_service.dart';
 import '../widgets/feed_video_player.dart';
+import '../widgets/share_post_sheet.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -105,8 +108,7 @@ class _HomeScreenState extends State<HomeScreen> {
         .from('notifications')
         .stream(primaryKey: ['id'])
         .map((rows) => rows
-        .where((n) =>
-    n['user_id'] == user.id && n['is_read'] == false)
+        .where((n) => n['user_id'] == user.id && n['is_read'] == false)
         .length);
   }
 
@@ -145,8 +147,7 @@ class _HomeScreenState extends State<HomeScreen> {
               child: CircleAvatar(
                 backgroundImage:
                 avatarUrl != null ? NetworkImage(avatarUrl) : null,
-                child:
-                avatarUrl == null ? const Icon(Icons.person) : null,
+                child: avatarUrl == null ? const Icon(Icons.person) : null,
               ),
             ),
             title: Text(
@@ -157,9 +158,7 @@ class _HomeScreenState extends State<HomeScreen> {
             trailing: isMyPost || currentUser == null
                 ? null
                 : StreamBuilder<List<Map<String, dynamic>>>(
-              stream: _supabase
-                  .from('follows')
-                  .stream(primaryKey: ['id']),
+              stream: _supabase.from('follows').stream(primaryKey: ['id']),
               builder: (_, snap) {
                 final rows = snap.data ?? [];
 
@@ -172,80 +171,92 @@ class _HomeScreenState extends State<HomeScreen> {
                 return OutlinedButton(
                   onPressed: () {
                     isFollowing
-                        ? _followService
-                        .unfollowUser(post['user_id'])
-                        : _followService
-                        .followUser(post['user_id']);
+                        ? _followService.unfollowUser(post['user_id'])
+                        : _followService.followUser(post['user_id']);
                   },
-                  child: Text(
-                      isFollowing ? "Following" : "Follow"),
+                  child: Text(isFollowing ? "Following" : "Follow"),
                 );
               },
             ),
           ),
 
           // ---------- MEDIA ----------
-          AspectRatio(
-            aspectRatio: 1,
-            child: mediaList.isNotEmpty
-                ? Stack(
-              alignment: Alignment.bottomCenter,
-              children: [
-                PageView.builder(
-                  itemCount: mediaList.length,
-                  onPageChanged: (index) {
-                    setState(() {
-                      _pageIndexes[post['id']] = index;
-                    });
-                  },
-                  itemBuilder: (_, i) {
-                    final media = mediaList[i];
-
-                    if (media['media_type'] == 'video') {
-                      final bool isActive =
-                          activeIndex == i && _currentIndex == 0;
-
-                      return Stack(
-                        children: [
-                          FeedVideoPlayer(
-                            key: ValueKey(media['media_url']),
-                            videoUrl: media['media_url'],
-                          ),
-                        ],
-                      );
-                    }
-
-                    return Image.network(
-                      media['media_url'],
-                      fit: BoxFit.cover,
-                    );
-                  },
+          GestureDetector(
+            // ✅ FIX ADDED: open post detail and refresh feed after edit/delete
+            onTap: () async {
+              final updated = await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => PostDetailScreen(postId: post['id']),
                 ),
-                Positioned(
-                  bottom: 8,
-                  child: Row(
-                    children: List.generate(
-                      mediaList.length,
-                          (i) => Container(
-                        margin: const EdgeInsets.symmetric(
-                            horizontal: 3),
-                        width: 6,
-                        height: 6,
-                        decoration: BoxDecoration(
-                          color: i == activeIndex
-                              ? Colors.white
-                              : Colors.white54,
-                          shape: BoxShape.circle,
+              );
+
+              if (updated == true) {
+                _loadPosts();
+              }
+            },
+            child: AspectRatio(
+              aspectRatio: 1,
+              child: mediaList.isNotEmpty
+                  ? Stack(
+                alignment: Alignment.bottomCenter,
+                children: [
+                  PageView.builder(
+                    itemCount: mediaList.length,
+                    onPageChanged: (index) {
+                      setState(() {
+                        _pageIndexes[post['id']] = index;
+                      });
+                    },
+                    itemBuilder: (_, i) {
+                      final media = mediaList[i];
+
+                      if (media['media_type'] == 'video') {
+                        final bool isActive =
+                            activeIndex == i && _currentIndex == 0;
+
+                        return Stack(
+                          children: [
+                            FeedVideoPlayer(
+                              key: ValueKey(media['media_url']),
+                              videoUrl: media['media_url'],
+                            ),
+                          ],
+                        );
+                      }
+
+                      return Image.network(
+                        media['media_url'],
+                        fit: BoxFit.cover,
+                      );
+                    },
+                  ),
+                  Positioned(
+                    bottom: 8,
+                    child: Row(
+                      children: List.generate(
+                        mediaList.length,
+                            (i) => Container(
+                          margin:
+                          const EdgeInsets.symmetric(horizontal: 3),
+                          width: 6,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            color: i == activeIndex
+                                ? Colors.white
+                                : Colors.white54,
+                            shape: BoxShape.circle,
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-              ],
-            )
-                : Image.network(
-              post['media_url'],
-              fit: BoxFit.cover,
+                ],
+              )
+                  : Image.network(
+                post['media_url'],
+                fit: BoxFit.cover,
+              ),
             ),
           ),
 
@@ -255,9 +266,7 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Row(
               children: [
                 StreamBuilder<List<Map<String, dynamic>>>(
-                  stream: _supabase
-                      .from('likes')
-                      .stream(primaryKey: ['id']),
+                  stream: _supabase.from('likes').stream(primaryKey: ['id']),
                   builder: (_, snap) {
                     final likes = snap.data ?? [];
 
@@ -266,30 +275,23 @@ class _HomeScreenState extends State<HomeScreen> {
                         l['user_id'] == currentUser.id &&
                             l['post_id'] == post['id']);
 
-                    final likeCount = likes
-                        .where((l) => l['post_id'] == post['id'])
-                        .length;
+                    final likeCount =
+                        likes.where((l) => l['post_id'] == post['id']).length;
 
                     return Row(
                       children: [
                         IconButton(
                           icon: Icon(
-                            isLiked
-                                ? Icons.favorite
-                                : Icons.favorite_border,
-                            color:
-                            isLiked ? Colors.red : Colors.black,
+                            isLiked ? Icons.favorite : Icons.favorite_border,
+                            color: isLiked ? Colors.red : Colors.black,
                           ),
                           onPressed: () {
                             isLiked
-                                ? _likeService
-                                .unlikePost(post['id'])
-                                : _likeService
-                                .likePost(post['id']);
+                                ? _likeService.unlikePost(post['id'])
+                                : _likeService.likePost(post['id']);
                           },
                         ),
-                        if (likeCount > 0)
-                          Text(likeCount.toString()),
+                        if (likeCount > 0) Text(likeCount.toString()),
                       ],
                     );
                   },
@@ -300,12 +302,28 @@ class _HomeScreenState extends State<HomeScreen> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) =>
-                            CommentsScreen(postId: post['id']),
+                        builder: (_) => CommentsScreen(postId: post['id']),
                       ),
                     );
                   },
                 ),
+
+                // ✅ NEW: SHARE BUTTON (Instagram Style)
+                IconButton(
+                  icon: const Icon(Icons.send_outlined),
+                  onPressed: () {
+                    showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      shape: const RoundedRectangleBorder(
+                        borderRadius:
+                        BorderRadius.vertical(top: Radius.circular(18)),
+                      ),
+                      builder: (_) => SharePostSheet(postId: post['id']),
+                    );
+                  },
+                ),
+
                 const Spacer(),
                 IconButton(
                   icon: const Icon(Icons.bookmark_border),
@@ -319,9 +337,7 @@ class _HomeScreenState extends State<HomeScreen> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: StreamBuilder<List<Map<String, dynamic>>>(
-              stream: _supabase
-                  .from('comments')
-                  .stream(primaryKey: ['id']),
+              stream: _supabase.from('comments').stream(primaryKey: ['id']),
               builder: (_, snap) {
                 final count = (snap.data ?? [])
                     .where((c) => c['post_id'] == post['id'])
@@ -330,8 +346,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 if (count == 0) return const SizedBox();
                 return Text(
                   "View $count comments",
-                  style: const TextStyle(
-                      fontSize: 13, color: Colors.grey),
+                  style: const TextStyle(fontSize: 13, color: Colors.grey),
                 );
               },
             ),
@@ -339,16 +354,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
           // ---------- CAPTION ----------
           Padding(
-            padding: const EdgeInsets.symmetric(
-                horizontal: 12, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             child: RichText(
               text: TextSpan(
                 style: const TextStyle(color: Colors.black),
                 children: [
                   TextSpan(
                     text: '$userName ',
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold),
+                    style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                   TextSpan(text: post['caption'] ?? ''),
                 ],
@@ -375,7 +388,7 @@ class _HomeScreenState extends State<HomeScreen> {
       case 1:
         return const Center(child: Text("Explore"));
       case 2:
-        return const Center(child: Text("Messages"));
+        return const InboxScreen();
       case 3:
         return const ProfileScreen();
       default:
@@ -403,8 +416,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) =>
-                            const NotificationScreen(),
+                            builder: (_) => const NotificationScreen(),
                           ),
                         );
                       },
@@ -419,8 +431,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           child: Text(
                             count.toString(),
                             style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 10),
+                                color: Colors.white, fontSize: 10),
                           ),
                         ),
                       ),
@@ -453,16 +464,12 @@ class _HomeScreenState extends State<HomeScreen> {
         type: BottomNavigationBarType.fixed,
         onTap: (i) => setState(() => _currentIndex = i),
         items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: "Home"),
           BottomNavigationBarItem(
-              icon: Icon(Icons.home), label: "Home"),
+              icon: Icon(Icons.explore_outlined), label: "Explore"),
           BottomNavigationBarItem(
-              icon: Icon(Icons.explore_outlined),
-              label: "Explore"),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.chat_bubble_outline),
-              label: "Messages"),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.person), label: "Profile"),
+              icon: Icon(Icons.chat_bubble_outline), label: "Messages"),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: "Profile"),
         ],
       ),
     );

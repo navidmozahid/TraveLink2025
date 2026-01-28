@@ -65,7 +65,6 @@ class PostService {
     final user = supabase.auth.currentUser;
     if (user == null) throw Exception('User not logged in');
 
-    // 1️⃣ Create post
     final post = await supabase
         .from('posts')
         .insert({
@@ -78,14 +77,13 @@ class PostService {
 
     final String postId = post['id'];
 
-    // 2️⃣ Upload media
     final urls = await uploadMultipleMedia(mediaFiles);
 
-    // 3️⃣ Insert post_media
     for (final url in urls) {
       final isVideo = url.endsWith('.mp4') ||
           url.endsWith('.mov') ||
-          url.endsWith('.avi');
+          url.endsWith('.avi') ||
+          url.endsWith('.mkv');
 
       await supabase.from('post_media').insert({
         'post_id': postId,
@@ -135,16 +133,17 @@ class PostService {
     }).toList();
   }
 
-  // ================= FETCH MY POSTS (FIXED & FUTURE SAFE) =================
+  // ================= FETCH MY POSTS (PROFILE GRID) =================
   Future<List<Map<String, dynamic>>> fetchMyPosts() async {
     final user = supabase.auth.currentUser;
     if (user == null) return [];
 
     final posts = await supabase
         .from('posts')
-        .select('id, media_url, created_at')
+        .select('id, media_url, caption, location, created_at')
         .eq('user_id', user.id)
-        .order('created_at', ascending: false);
+        .order('created_at', ascending: false)
+        .limit(100); // 🔥 FORCE FRESH DATA
 
     if (posts.isEmpty) return [];
 
@@ -163,9 +162,81 @@ class PostService {
     return posts.map<Map<String, dynamic>>((post) {
       return {
         ...post,
-        // ✅ fallback logic
-        'media_url': post['media_url'] ?? previewMap[post['id']],
+        'media_url': previewMap[post['id']] ?? post['media_url'],
       };
     }).toList();
+  }
+
+  // ================= FETCH POST MEDIA =================
+  Future<List<Map<String, dynamic>>> fetchPostMedia(String postId) async {
+    final data = await supabase
+        .from('post_media')
+        .select()
+        .eq('post_id', postId)
+        .order('created_at');
+
+    return List<Map<String, dynamic>>.from(data);
+  }
+
+  // ================= UPDATE POST WITH MEDIA =================
+  Future<void> updatePostWithMedia({
+    required String postId,
+    required String caption,
+    required String location,
+    required List<Map<String, dynamic>> removedMedia,
+    required List<File> newMediaFiles,
+  }) async {
+    final user = supabase.auth.currentUser;
+    if (user == null) throw Exception('User not logged in');
+
+    // ✅✅✅ FIXED PART: Update caption/location with correct filter + select()
+    final updatedPost = await supabase
+        .from('posts')
+        .update({
+      'caption': caption,
+      'location': location,
+    })
+        .eq('id', postId)
+        .eq('user_id', user.id) // ✅ IMPORTANT for RLS + safe update
+        .select()
+        .maybeSingle();
+
+    if (updatedPost == null) {
+      throw Exception('Post update failed (RLS blocked or post not found)');
+    }
+
+    // ✅ REMOVE MEDIA
+    for (final media in removedMedia) {
+      final mediaUrl = media['media_url'] as String;
+      final path = Uri.parse(mediaUrl)
+          .path
+          .split('/storage/v1/object/public/$_bucket/')
+          .last;
+
+      await supabase.storage.from(_bucket).remove([path]);
+      await supabase.from('post_media').delete().eq('id', media['id']);
+    }
+
+    // ✅ ADD NEW MEDIA
+    for (final file in newMediaFiles) {
+      final ext = file.path.split('.').last.toLowerCase();
+      final filePath = '${user.id}/${postId}_${_uuid.v4()}.$ext';
+
+      await supabase.storage.from(_bucket).upload(
+        filePath,
+        file,
+        fileOptions: const FileOptions(upsert: true),
+      );
+
+      final publicUrl = supabase.storage.from(_bucket).getPublicUrl(filePath);
+
+      await supabase.from('post_media').insert({
+        'post_id': postId,
+        'media_url': publicUrl,
+        'media_type': ['mp4', 'mov', 'avi', 'mkv'].contains(ext)
+            ? 'video'
+            : 'image',
+      });
+    }
   }
 }

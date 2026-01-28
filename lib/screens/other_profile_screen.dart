@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../services/follow_service.dart';
+import '../services/message_service.dart';
+import 'chat_screen.dart';
 import 'message_screen.dart';
 import 'post_detail_screen.dart';
 
@@ -28,8 +30,7 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
   bool _isFollowing = false;
   bool _followLoading = false;
 
-  bool get isMyProfile =>
-      widget.userId == _supabase.auth.currentUser?.id;
+  bool get isMyProfile => widget.userId == _supabase.auth.currentUser?.id;
 
   @override
   void initState() {
@@ -100,9 +101,18 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
       );
     }
 
-    final String name = _profile?['name'] ?? 'Traveler';
-    final String bio = _profile?['bio'] ?? '';
+    final String name =
+    ((_profile?['name'] ?? '').toString().trim().isNotEmpty)
+        ? (_profile?['name'] ?? '').toString()
+        : 'Traveler';
+
+    final String? username = _profile?['username'];
+    final String bio = (_profile?['bio'] ?? '').toString();
     final String? avatar = _profile?['avatar_url'];
+    final String? website = _profile?['website'];
+    final String? location = _profile?['location'];
+    final String? homeCountry = _profile?['home_country'];
+    final List interests = _profile?['interests'] ?? [];
 
     return Scaffold(
       appBar: AppBar(title: Text(name)),
@@ -115,8 +125,7 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
               children: [
                 CircleAvatar(
                   radius: 40,
-                  backgroundImage:
-                  avatar != null ? NetworkImage(avatar) : null,
+                  backgroundImage: avatar != null ? NetworkImage(avatar) : null,
                   child: avatar == null
                       ? const Icon(Icons.person, size: 40)
                       : null,
@@ -154,7 +163,59 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
               ),
             ),
 
+            // ✅ USERNAME (ADDED)
+            if (username != null && username.isNotEmpty)
+              Text('@$username', style: const TextStyle(color: Colors.grey)),
+
+            const SizedBox(height: 6),
+
             if (bio.isNotEmpty) Text(bio),
+
+            const SizedBox(height: 8),
+
+            // ✅ LOCATION + HOME COUNTRY (ADDED)
+            if (location != null || homeCountry != null)
+              Row(
+                children: [
+                  const Icon(Icons.location_on, size: 16, color: Colors.grey),
+                  const SizedBox(width: 4),
+                  Text(
+                    [location, homeCountry].where((e) => e != null).join(', '),
+                    style: const TextStyle(color: Colors.grey),
+                  ),
+                ],
+              ),
+
+            // ✅ WEBSITE (ADDED)
+            if (website != null && website.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  website,
+                  style: const TextStyle(
+                    color: Colors.blue,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+
+            // ✅ INTERESTS (ADDED)
+            if (interests.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: interests
+                      .map<Widget>(
+                        (i) => Chip(
+                      label: Text(i.toString()),
+                      backgroundColor: Colors.grey[200],
+                    ),
+                  )
+                      .toList(),
+                ),
+              ),
 
             const SizedBox(height: 12),
 
@@ -163,25 +224,46 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
                 children: [
                   Expanded(
                     child: ElevatedButton(
-                      onPressed:
-                      _followLoading ? null : _toggleFollow,
-                      child:
-                      Text(_isFollowing ? 'Following' : 'Follow'),
+                      onPressed: _followLoading ? null : _toggleFollow,
+                      child: Text(_isFollowing ? 'Following' : 'Follow'),
                     ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: () {
+                      onPressed: () async {
+                        // ✅ ONLY NEW CODE (Messaging) - Everything else unchanged
+                        final messageService = MessageService();
+
+                        final conversationId = await messageService
+                            .getOrCreateConversation(widget.userId);
+
+                        if (!context.mounted) return;
+
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => MessageScreen(
-                              userId: widget.userId,
-                              userName: name,
+                            builder: (_) => ChatScreen(
+                              conversationId: conversationId,
+                              otherUser: {
+                                "id": widget.userId,
+                                "username": _profile?['username'] ?? name,
+                                "avatar_url": _profile?['avatar_url'],
+                              },
                             ),
                           ),
                         );
+
+                        // ✅ If you still want to keep old MessageScreen, do NOT delete it.
+                        // Navigator.push(
+                        //   context,
+                        //   MaterialPageRoute(
+                        //     builder: (_) => MessageScreen(
+                        //       userId: widget.userId,
+                        //       userName: name,
+                        //     ),
+                        //   ),
+                        // );
                       },
                       child: const Text("Message"),
                     ),
@@ -218,8 +300,7 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
                 String? previewUrl;
                 bool isVideo = false;
 
-                if (media.isNotEmpty &&
-                    media.first['media_url'] != null) {
+                if (media.isNotEmpty && media.first['media_url'] != null) {
                   previewUrl = media.first['media_url'];
                   isVideo = media.first['media_type'] == 'video';
                 } else if (post['media_url'] != null) {

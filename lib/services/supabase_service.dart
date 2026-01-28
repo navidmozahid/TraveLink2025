@@ -15,9 +15,6 @@ class SupabaseService {
   // ======================================================
 
   /// TRAVELER SIGN UP
-  /// - Creates auth user
-  /// - Sends name & country as metadata
-  /// - Ensures profile row exists (upsert safety)
   Future<void> signUpTraveler({
     required String email,
     required String password,
@@ -25,7 +22,6 @@ class SupabaseService {
     required String phone,
     required String country,
   }) async {
-    // 1️⃣ Sign up user with metadata
     final AuthResponse response = await client.auth.signUp(
       email: email,
       password: password,
@@ -41,7 +37,6 @@ class SupabaseService {
       throw Exception('Signup failed: user is null');
     }
 
-    // 2️⃣ Safety net: ensure profile exists (upsert)
     await client.from('profiles').upsert({
       'id': user.id,
       'email': email,
@@ -90,10 +85,16 @@ class SupabaseService {
         .maybeSingle();
   }
 
-  /// UPDATE PROFILE (TEXT DATA)
+  /// UPDATE PROFILE (EXTENDED – SAFE)
   Future<void> updateProfile({
     String? name,
+    String? username,
     String? bio,
+    String? website,
+    String? location,
+    String? homeCountry,
+    String? dateOfBirth,
+    List<String>? interests,
   }) async {
     final user = client.auth.currentUser;
     if (user == null) {
@@ -105,8 +106,33 @@ class SupabaseService {
     if (name != null && name.isNotEmpty) {
       updates['name'] = name;
     }
+
+    if (username != null && username.isNotEmpty) {
+      updates['username'] = username;
+    }
+
     if (bio != null) {
       updates['bio'] = bio;
+    }
+
+    if (website != null && website.isNotEmpty) {
+      updates['website'] = website;
+    }
+
+    if (location != null && location.isNotEmpty) {
+      updates['location'] = location;
+    }
+
+    if (homeCountry != null && homeCountry.isNotEmpty) {
+      updates['home_country'] = homeCountry;
+    }
+
+    if (dateOfBirth != null && dateOfBirth.isNotEmpty) {
+      updates['date_of_birth'] = dateOfBirth;
+    }
+
+    if (interests != null) {
+      updates['interests'] = interests;
     }
 
     if (updates.isNotEmpty) {
@@ -119,15 +145,12 @@ class SupabaseService {
   // ======================================================
 
   /// PICK IMAGE FROM GALLERY + UPLOAD TO STORAGE
-  /// - Uploads image
-  /// - Saves public URL to profile
   Future<String?> uploadAvatarFromGallery() async {
     final user = client.auth.currentUser;
     if (user == null) {
       throw Exception('User not logged in');
     }
 
-    // 1️⃣ Pick image
     final XFile? image = await _picker.pickImage(
       source: ImageSource.gallery,
       imageQuality: 80,
@@ -140,18 +163,15 @@ class SupabaseService {
     final fileName = '${user.id}_${_uuid.v4()}.$fileExt';
     final filePath = 'avatars/$fileName';
 
-    // 2️⃣ Upload to Supabase Storage
     await client.storage.from('avatars').upload(
       filePath,
       file,
       fileOptions: const FileOptions(upsert: true),
     );
 
-    // 3️⃣ Get public URL
     final avatarUrl =
     client.storage.from('avatars').getPublicUrl(filePath);
 
-    // 4️⃣ Save URL to profile
     await client
         .from('profiles')
         .update({'avatar_url': avatarUrl})
