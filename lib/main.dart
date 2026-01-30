@@ -18,12 +18,88 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const primary = Color(0xFF0077B6); // ✅ Ocean Blue (Travel standard)
+    const secondary = Color(0xFF00B4D8); // ✅ Sky Blue accent
+    const bg = Color(0xFFF8FAFC); // ✅ clean background
+
     return MaterialApp(
       title: 'TraveLink', // Changed from XplorerHub
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        primaryColor: const Color(0xFF023e8a),
         useMaterial3: true,
+
+        // ✅ Standard Material 3 ColorScheme (IMPORTANT)
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: primary,
+          primary: primary,
+          secondary: secondary,
+          surface: Colors.white,
+          background: bg,
+        ),
+
+        scaffoldBackgroundColor: bg,
+
+        // ✅ AppBar standard style (clean)
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.white,
+          elevation: 0,
+          centerTitle: false,
+          titleTextStyle: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            color: Colors.black,
+          ),
+          iconTheme: IconThemeData(color: Colors.black),
+        ),
+
+        // ✅ Buttons standard style
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: primary,
+            foregroundColor: Colors.white,
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+            padding: const EdgeInsets.symmetric(vertical: 12),
+          ),
+        ),
+
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Colors.black,
+            side: const BorderSide(color: Color(0xFFE5E7EB)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+            padding: const EdgeInsets.symmetric(vertical: 12),
+          ),
+        ),
+
+        // ✅ Input fields standard
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: Colors.white,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: primary, width: 1.5),
+          ),
+        ),
+
+        // ✅ Dividers standard
+        dividerTheme: const DividerThemeData(
+          color: Color(0xFFE5E7EB),
+          thickness: 1,
+        ),
       ),
       home: const RootScreen(), // Changed from WelcomeScreen
     );

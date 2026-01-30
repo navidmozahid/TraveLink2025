@@ -7,8 +7,12 @@ import 'create_post_screen.dart';
 import 'comments_screen.dart';
 import 'other_profile_screen.dart';
 import 'notification_screen.dart';
-import 'post_detail_screen.dart'; // ✅ ADDED (needed)
+import 'post_detail_screen.dart';
 import 'inbox_screen.dart';
+import 'post_likes_screen.dart';
+import 'saved_posts_screen.dart';
+import 'explore_screen.dart';
+
 
 import '../services/post_service.dart';
 import '../services/follow_service.dart';
@@ -43,6 +47,35 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _loadPosts();
+  }
+
+  // ✅ NEW: Convert created_at to "time ago" (Instagram style)
+  String _timeAgo(dynamic createdAt) {
+    if (createdAt == null) return "";
+
+    DateTime date;
+
+    try {
+      date = DateTime.parse(createdAt.toString());
+    } catch (_) {
+      return "";
+    }
+
+    final diff = DateTime.now().difference(date);
+
+    if (diff.inSeconds < 60) return "${diff.inSeconds}s ago";
+    if (diff.inMinutes < 60) return "${diff.inMinutes}m ago";
+    if (diff.inHours < 24) return "${diff.inHours}h ago";
+    if (diff.inDays < 7) return "${diff.inDays}d ago";
+
+    final weeks = (diff.inDays / 7).floor();
+    if (weeks < 4) return "${weeks}w ago";
+
+    final months = (diff.inDays / 30).floor();
+    if (months < 12) return "${months}mo ago";
+
+    final years = (diff.inDays / 365).floor();
+    return "${years}y ago";
   }
 
   // ---------------- LOAD POSTS ----------------
@@ -87,6 +120,22 @@ class _HomeScreenState extends State<HomeScreen> {
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const Divider(),
+
+            // ✅ NEW: Saved Posts (Instagram style)
+            ListTile(
+              leading: const Icon(Icons.bookmark_border),
+              title: const Text("Saved"),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const SavedPostsScreen(),
+                  ),
+                );
+              },
+            ),
+
             ListTile(
               leading: const Icon(Icons.logout, color: Colors.red),
               title: const Text("Logout"),
@@ -127,11 +176,19 @@ class _HomeScreenState extends State<HomeScreen> {
     return Card(
       margin: const EdgeInsets.only(bottom: 14),
       elevation: 0,
+
+      // ✅ Standard card look
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      clipBehavior: Clip.antiAlias,
+
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // ---------- HEADER ----------
           ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12),
             leading: GestureDetector(
               onTap: () {
                 if (!isMyPost) {
@@ -182,7 +239,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
           // ---------- MEDIA ----------
           GestureDetector(
-            // ✅ FIX ADDED: open post detail and refresh feed after edit/delete
+            // ✅ open post detail and refresh feed after edit/delete
             onTap: () async {
               final updated = await Navigator.push(
                 context,
@@ -291,7 +348,19 @@ class _HomeScreenState extends State<HomeScreen> {
                                 : _likeService.likePost(post['id']);
                           },
                         ),
-                        if (likeCount > 0) Text(likeCount.toString()),
+                        if (likeCount > 0)
+                          GestureDetector(
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      PostLikesScreen(postId: post['id']),
+                                ),
+                              );
+                            },
+                            child: Text(likeCount.toString()),
+                          ),
                       ],
                     );
                   },
@@ -308,7 +377,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   },
                 ),
 
-                // ✅ NEW: SHARE BUTTON (Instagram Style)
+                // ✅ SHARE BUTTON
                 IconButton(
                   icon: const Icon(Icons.send_outlined),
                   onPressed: () {
@@ -325,9 +394,40 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
 
                 const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.bookmark_border),
-                  onPressed: () {},
+
+                // ✅ BOOKMARK SAVE
+                StreamBuilder<List<Map<String, dynamic>>>(
+                  stream: _supabase.from('saved_posts').stream(primaryKey: ['id']),
+                  builder: (_, snap) {
+                    final rows = snap.data ?? [];
+                    final myId = currentUser?.id;
+
+                    final bool isSaved = myId != null &&
+                        rows.any((s) =>
+                        s['user_id'] == myId && s['post_id'] == post['id']);
+
+                    return IconButton(
+                      icon: Icon(
+                        isSaved ? Icons.bookmark : Icons.bookmark_border,
+                      ),
+                      onPressed: () async {
+                        if (myId == null) return;
+
+                        if (isSaved) {
+                          await _supabase
+                              .from('saved_posts')
+                              .delete()
+                              .eq('user_id', myId)
+                              .eq('post_id', post['id']);
+                        } else {
+                          await _supabase.from('saved_posts').insert({
+                            'user_id': myId,
+                            'post_id': post['id'],
+                          });
+                        }
+                      },
+                    );
+                  },
                 ),
               ],
             ),
@@ -346,7 +446,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 if (count == 0) return const SizedBox();
                 return Text(
                   "View $count comments",
-                  style: const TextStyle(fontSize: 13, color: Colors.grey),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Color(0xFF475569), // ✅ not gray
+                    fontWeight: FontWeight.w500,
+                  ),
                 );
               },
             ),
@@ -369,6 +473,19 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
+          // ✅ NEW: POST TIME (Instagram style)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Text(
+              _timeAgo(post['created_at']),
+              style: const TextStyle(
+                fontSize: 12,
+                color: Color(0xFF475569), // ✅ not gray
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+
           const SizedBox(height: 10),
         ],
       ),
@@ -381,12 +498,17 @@ class _HomeScreenState extends State<HomeScreen> {
       case 0:
         return _loading
             ? const Center(child: CircularProgressIndicator())
-            : ListView.builder(
-          itemCount: _posts.length,
-          itemBuilder: (_, i) => _buildPost(_posts[i]),
+            : SafeArea(
+          top: false,
+          child: ListView.builder(
+            padding:
+            const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+            itemCount: _posts.length,
+            itemBuilder: (_, i) => _buildPost(_posts[i]),
+          ),
         );
       case 1:
-        return const Center(child: Text("Explore"));
+        return const ExploreScreen();
       case 2:
         return const InboxScreen();
       case 3:
@@ -459,18 +581,24 @@ class _HomeScreenState extends State<HomeScreen> {
           _loadPosts();
         },
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        type: BottomNavigationBarType.fixed,
-        onTap: (i) => setState(() => _currentIndex = i),
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: "Home"),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.explore_outlined), label: "Explore"),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.chat_bubble_outline), label: "Messages"),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: "Profile"),
-        ],
+      bottomNavigationBar: Container(
+        decoration: const BoxDecoration(
+          border: Border(top: BorderSide(color: Color(0xFFE5E7EB))),
+          color: Colors.white,
+        ),
+        child: BottomNavigationBar(
+          currentIndex: _currentIndex,
+          type: BottomNavigationBarType.fixed,
+          onTap: (i) => setState(() => _currentIndex = i),
+          items: const [
+            BottomNavigationBarItem(icon: Icon(Icons.home), label: "Home"),
+            BottomNavigationBarItem(
+                icon: Icon(Icons.explore_outlined), label: "Explore"),
+            BottomNavigationBarItem(
+                icon: Icon(Icons.chat_bubble_outline), label: "Messages"),
+            BottomNavigationBarItem(icon: Icon(Icons.person), label: "Profile"),
+          ],
+        ),
       ),
     );
   }

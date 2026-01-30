@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'edit_profile_screen.dart';
@@ -5,6 +7,7 @@ import 'post_detail_screen.dart';
 import 'edit_post_screen.dart';
 import '../services/post_service.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'follow_list_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -27,6 +30,70 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.initState();
     _loadProfile();
     _loadMyPosts();
+  }
+
+  // ✅ NEW: Instagram style avatar preview popup (blur background)
+  void _showAvatarPreview(String avatarUrl) {
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: "avatar",
+      barrierColor: Colors.transparent,
+      pageBuilder: (_, __, ___) {
+        return GestureDetector(
+          onTap: () => Navigator.pop(context),
+          child: Material(
+            color: Colors.transparent,
+            child: Stack(
+              children: [
+                // ✅ BLUR BACKGROUND
+                Positioned.fill(
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                    child: Container(
+                      color: Colors.black.withOpacity(0.35),
+                    ),
+                  ),
+                ),
+
+                // ✅ AVATAR PREVIEW
+                Center(
+                  child: GestureDetector(
+                    onTap: () {},
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(18),
+                      child: Image.network(
+                        avatarUrl,
+                        width: 300,
+                        height: 300,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          width: 300,
+                          height: 300,
+                          color: Color(0xFF475569),
+                          child: const Icon(Icons.broken_image, size: 40),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                // ✅ CLOSE BUTTON
+                Positioned(
+                  top: 40,
+                  right: 18,
+                  child: IconButton(
+                    icon:
+                    const Icon(Icons.close, color: Colors.white, size: 28),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   // ✅ ADDED: check video url
@@ -125,6 +192,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final String? homeCountry = _profile!['home_country'];
     final List interests = _profile!['interests'] ?? [];
 
+    final String myId = Supabase.instance.client.auth.currentUser!.id;
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -133,11 +202,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
           // ---------- TOP ----------
           Row(
             children: [
-              CircleAvatar(
-                radius: 40,
-                backgroundColor: Colors.grey[300],
-                backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl) : null,
-                child: avatarUrl == null ? const Icon(Icons.person, size: 40) : null,
+              GestureDetector(
+                onTap: () {
+                  if (avatarUrl != null && avatarUrl.isNotEmpty) {
+                    _showAvatarPreview(avatarUrl);
+                  }
+                },
+                child: CircleAvatar(
+                  radius: 40,
+                  backgroundColor: Color(0xFF475569),
+                  backgroundImage:
+                  avatarUrl != null ? NetworkImage(avatarUrl) : null,
+                  child:
+                  avatarUrl == null ? const Icon(Icons.person, size: 40) : null,
+                ),
               ),
               const SizedBox(width: 20),
               Expanded(
@@ -146,24 +224,52 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   children: [
                     _StatItem(title: "Posts", value: "${_myPosts.length}"),
 
-                    // ✅ FOLLOWERS (REALTIME)
+                    // ✅ FOLLOWERS (REALTIME + CLICKABLE)
                     StreamBuilder<int>(
                       stream: _followersCount(),
                       builder: (_, snap) {
-                        return _StatItem(
-                          title: "Followers",
-                          value: (snap.data ?? 0).toString(),
+                        return GestureDetector(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => FollowListScreen(
+                                  userId: myId,
+                                  showFollowers: true,
+                                  mutualOnly: false,
+                                ),
+                              ),
+                            );
+                          },
+                          child: _StatItem(
+                            title: "Followers",
+                            value: (snap.data ?? 0).toString(),
+                          ),
                         );
                       },
                     ),
 
-                    // ✅ FOLLOWING (REALTIME)
+                    // ✅ FOLLOWING (REALTIME + CLICKABLE)
                     StreamBuilder<int>(
                       stream: _followingCount(),
                       builder: (_, snap) {
-                        return _StatItem(
-                          title: "Following",
-                          value: (snap.data ?? 0).toString(),
+                        return GestureDetector(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => FollowListScreen(
+                                  userId: myId,
+                                  showFollowers: false,
+                                  mutualOnly: false,
+                                ),
+                              ),
+                            );
+                          },
+                          child: _StatItem(
+                            title: "Following",
+                            value: (snap.data ?? 0).toString(),
+                          ),
                         );
                       },
                     ),
@@ -183,7 +289,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
           // ---------- USERNAME ----------
           if (username != null && username.isNotEmpty)
-            Text('@$username', style: const TextStyle(color: Colors.grey)),
+            Text('@$username', style: const TextStyle(color: Color(0xFF475569))),
 
           const SizedBox(height: 6),
 
@@ -196,11 +302,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
           if (location != null || homeCountry != null)
             Row(
               children: [
-                const Icon(Icons.location_on, size: 16, color: Colors.grey),
+                const Icon(Icons.location_on, size: 16, color: Color(0xFF475569)),
                 const SizedBox(width: 4),
                 Text(
                   [location, homeCountry].where((e) => e != null).join(', '),
-                  style: const TextStyle(color: Colors.grey),
+                  style: const TextStyle(color: Color(0xFF475569)),
                 ),
               ],
             ),
@@ -235,7 +341,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     .map<Widget>(
                       (i) => Chip(
                     label: Text(i.toString()),
-                    backgroundColor: Colors.grey[200],
+                    backgroundColor: Color(0xFF475569),
                   ),
                 )
                     .toList(),
@@ -293,7 +399,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   final updated = await Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => PostDetailScreen(postId: post['id']),
+                      builder: (_) =>
+                          PostDetailScreen(postId: post['id']),
                     ),
                   );
 
@@ -324,7 +431,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     final String url = (post['media_url'] ?? '').toString();
 
                     if (url.isEmpty) {
-                      return Container(color: Colors.grey[300]);
+                      return Container(color: Color(0xFF475569));
                     }
 
                     if (_isVideoUrl(url)) {
@@ -345,7 +452,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) {
                         return Container(
-                          color: Colors.grey[300],
+                          color: Color(0xFF475569),
                           child: const Center(
                             child: Icon(Icons.broken_image),
                           ),
@@ -378,7 +485,7 @@ class _StatItem extends StatelessWidget {
           value,
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
         ),
-        Text(title, style: const TextStyle(color: Colors.grey)),
+        Text(title, style: const TextStyle(color: Color(0xFF475569))),
       ],
     );
   }

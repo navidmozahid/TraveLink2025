@@ -169,11 +169,21 @@ class _InboxScreenState extends State<InboxScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _conversations.isEmpty
-          ? const Center(child: Text("No conversations yet"))
+          ? const Center(
+        child: Text(
+          "No conversations yet",
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: Color(0xFF475569), // ✅ not gray
+          ),
+        ),
+      )
           : RefreshIndicator(
         onRefresh: _loadInbox,
-        child: ListView.builder(
+        child: ListView.separated(
           itemCount: _conversations.length,
+          separatorBuilder: (_, __) => const Divider(height: 1),
           itemBuilder: (context, index) {
             final convo = _conversations[index];
             final other = convo['other_user'];
@@ -217,7 +227,12 @@ class _InboxScreenState extends State<InboxScreen> {
                 }
               },
               child: ListTile(
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 6,
+                ),
                 leading: CircleAvatar(
+                  radius: 26,
                   backgroundImage: (other['avatar_url'] != null &&
                       other['avatar_url']
                           .toString()
@@ -225,22 +240,31 @@ class _InboxScreenState extends State<InboxScreen> {
                       ? NetworkImage(other['avatar_url'])
                       : null,
                   child: (other['avatar_url'] == null ||
-                      other['avatar_url'].toString().isEmpty)
+                      other['avatar_url']
+                          .toString()
+                          .isEmpty)
                       ? const Icon(Icons.person)
                       : null,
                 ),
-                title: Text(other['name'] ??
-                    other['username'] ??
-                    "User"),
+                title: Text(
+                  other['name'] ?? other['username'] ?? "User",
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 subtitle: Text(
                   "${other['username'] != null ? "@${other['username']} • " : ""}${lastMessage.toString().isEmpty ? "No messages yet" : lastMessage}",
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF475569), // ✅ not gray
+                    fontSize: 13,
+                  ),
                 ),
 
                 // ✅ FIXED: no overflow (compact trailing)
                 trailing: SizedBox(
-                  width: 45,
+                  width: 55,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -249,17 +273,24 @@ class _InboxScreenState extends State<InboxScreen> {
                       Text(
                         _timeAgo(lastMessageAt?.toString()),
                         style: const TextStyle(
-                            fontSize: 11, color: Colors.grey),
+                          fontSize: 11,
+                          color: Color(0xFF475569), // ✅ not gray
+                          fontWeight: FontWeight.w500,
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 6),
                       if (unreadCount > 0)
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 7, vertical: 3),
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
-                            color: Colors.blue,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .primary, // ✅ use theme
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(

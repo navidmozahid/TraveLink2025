@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -6,6 +8,7 @@ import '../services/message_service.dart';
 import 'chat_screen.dart';
 import 'message_screen.dart';
 import 'post_detail_screen.dart';
+import 'follow_list_screen.dart';
 
 class OtherProfileScreen extends StatefulWidget {
   final String userId;
@@ -31,6 +34,70 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
   bool _followLoading = false;
 
   bool get isMyProfile => widget.userId == _supabase.auth.currentUser?.id;
+
+  // ✅ NEW: Instagram style avatar preview popup (blur background)
+  void _showAvatarPreview(String avatarUrl) {
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: "avatar",
+      barrierColor: Colors.transparent,
+      pageBuilder: (_, __, ___) {
+        return GestureDetector(
+          onTap: () => Navigator.pop(context),
+          child: Material(
+            color: Colors.transparent,
+            child: Stack(
+              children: [
+                // ✅ BLUR BACKGROUND
+                Positioned.fill(
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                    child: Container(
+                      color: Colors.black.withOpacity(0.35),
+                    ),
+                  ),
+                ),
+
+                // ✅ AVATAR PREVIEW
+                Center(
+                  child: GestureDetector(
+                    onTap: () {},
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(18),
+                      child: Image.network(
+                        avatarUrl,
+                        width: 300,
+                        height: 300,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          width: 300,
+                          height: 300,
+                          color: Color(0xFF475569),
+                          child: const Icon(Icons.broken_image, size: 40),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                // ✅ CLOSE BUTTON
+                Positioned(
+                  top: 40,
+                  right: 18,
+                  child: IconButton(
+                    icon:
+                    const Icon(Icons.close, color: Colors.white, size: 28),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   @override
   void initState() {
@@ -101,18 +168,9 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
       );
     }
 
-    final String name =
-    ((_profile?['name'] ?? '').toString().trim().isNotEmpty)
-        ? (_profile?['name'] ?? '').toString()
-        : 'Traveler';
-
-    final String? username = _profile?['username'];
-    final String bio = (_profile?['bio'] ?? '').toString();
+    final String name = _profile?['name'] ?? 'Traveler';
+    final String bio = _profile?['bio'] ?? '';
     final String? avatar = _profile?['avatar_url'];
-    final String? website = _profile?['website'];
-    final String? location = _profile?['location'];
-    final String? homeCountry = _profile?['home_country'];
-    final List interests = _profile?['interests'] ?? [];
 
     return Scaffold(
       appBar: AppBar(title: Text(name)),
@@ -123,12 +181,20 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
           children: [
             Row(
               children: [
-                CircleAvatar(
-                  radius: 40,
-                  backgroundImage: avatar != null ? NetworkImage(avatar) : null,
-                  child: avatar == null
-                      ? const Icon(Icons.person, size: 40)
-                      : null,
+                GestureDetector(
+                  onTap: () {
+                    if (avatar != null && avatar.toString().isNotEmpty) {
+                      _showAvatarPreview(avatar);
+                    }
+                  },
+                  child: CircleAvatar(
+                    radius: 40,
+                    backgroundImage:
+                    avatar != null ? NetworkImage(avatar) : null,
+                    child: avatar == null
+                        ? const Icon(Icons.person, size: 40)
+                        : null,
+                  ),
                 ),
                 const SizedBox(width: 20),
                 Expanded(
@@ -139,13 +205,45 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
                         title: 'Posts',
                         value: _posts.length.toString(),
                       ),
-                      _StatItem(
-                        title: 'Followers',
-                        value: _followers.toString(),
+
+                      // ✅ FOLLOWERS (CLICKABLE → MUTUAL FOLLOWERS)
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => FollowListScreen(
+                                userId: widget.userId,
+                                showFollowers: true,
+                                mutualOnly: true,
+                              ),
+                            ),
+                          );
+                        },
+                        child: _StatItem(
+                          title: 'Followers',
+                          value: _followers.toString(),
+                        ),
                       ),
-                      _StatItem(
-                        title: 'Following',
-                        value: _following.toString(),
+
+                      // ✅ FOLLOWING (CLICKABLE → MUTUAL FOLLOWING)
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => FollowListScreen(
+                                userId: widget.userId,
+                                showFollowers: false,
+                                mutualOnly: true,
+                              ),
+                            ),
+                          );
+                        },
+                        child: _StatItem(
+                          title: 'Following',
+                          value: _following.toString(),
+                        ),
                       ),
                     ],
                   ),
@@ -163,59 +261,7 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
               ),
             ),
 
-            // ✅ USERNAME (ADDED)
-            if (username != null && username.isNotEmpty)
-              Text('@$username', style: const TextStyle(color: Colors.grey)),
-
-            const SizedBox(height: 6),
-
             if (bio.isNotEmpty) Text(bio),
-
-            const SizedBox(height: 8),
-
-            // ✅ LOCATION + HOME COUNTRY (ADDED)
-            if (location != null || homeCountry != null)
-              Row(
-                children: [
-                  const Icon(Icons.location_on, size: 16, color: Colors.grey),
-                  const SizedBox(width: 4),
-                  Text(
-                    [location, homeCountry].where((e) => e != null).join(', '),
-                    style: const TextStyle(color: Colors.grey),
-                  ),
-                ],
-              ),
-
-            // ✅ WEBSITE (ADDED)
-            if (website != null && website.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Text(
-                  website,
-                  style: const TextStyle(
-                    color: Colors.blue,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-
-            // ✅ INTERESTS (ADDED)
-            if (interests.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 10),
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 6,
-                  children: interests
-                      .map<Widget>(
-                        (i) => Chip(
-                      label: Text(i.toString()),
-                      backgroundColor: Colors.grey[200],
-                    ),
-                  )
-                      .toList(),
-                ),
-              ),
 
             const SizedBox(height: 12),
 
@@ -254,16 +300,6 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
                           ),
                         );
 
-                        // ✅ If you still want to keep old MessageScreen, do NOT delete it.
-                        // Navigator.push(
-                        //   context,
-                        //   MaterialPageRoute(
-                        //     builder: (_) => MessageScreen(
-                        //       userId: widget.userId,
-                        //       userName: name,
-                        //     ),
-                        //   ),
-                        // );
                       },
                       child: const Text("Message"),
                     ),
@@ -308,7 +344,7 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
                 }
 
                 if (previewUrl == null) {
-                  return Container(color: Colors.grey[300]);
+                  return Container(color: Color(0xFF475569));
                 }
 
                 return GestureDetector(
@@ -330,7 +366,7 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
                           previewUrl,
                           fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => Container(
-                            color: Colors.grey[300],
+                            color: Color(0xFF475569),
                           ),
                         )
                       else
@@ -380,7 +416,7 @@ class _StatItem extends StatelessWidget {
         ),
         Text(
           title,
-          style: const TextStyle(color: Colors.grey),
+          style: const TextStyle(color: Color(0xFF475569)),
         ),
       ],
     );

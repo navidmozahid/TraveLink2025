@@ -396,12 +396,18 @@ class _ChatScreenState extends State<ChatScreen> {
                 if (_isOtherUserTyping)
                   const Text(
                     "typing...",
-                    style: TextStyle(fontSize: 12, color: Colors.green),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF16A34A), // ✅ green
+                    ),
                   )
                 else if (widget.otherUser['username'] != null)
                   Text(
                     "@${widget.otherUser['username']}",
-                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF475569), // ✅ not gray
+                    ),
                   ),
               ],
             ),
@@ -415,8 +421,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   context: context,
                   builder: (_) => AlertDialog(
                     title: const Text("Delete chat?"),
-                    content:
-                    const Text("This will delete the chat only for you."),
+                    content: const Text("This will delete the chat only for you."),
                     actions: [
                       TextButton(
                         onPressed: () => Navigator.pop(context, false),
@@ -456,7 +461,10 @@ class _ChatScreenState extends State<ChatScreen> {
                 ? const Center(
               child: Text(
                 "No messages yet",
-                style: TextStyle(color: Colors.grey),
+                style: TextStyle(
+                  color: Color(0xFF475569), // ✅ not gray
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             )
                 : ListView.builder(
@@ -468,23 +476,20 @@ class _ChatScreenState extends State<ChatScreen> {
                 final isMe = msg['sender_id'] == myId;
                 final isDeleted = msg['is_deleted'] == true;
 
-                final bool isUnsent =
-                    msg['deleted_for_everyone'] == true;
+                final bool isUnsent = msg['deleted_for_everyone'] == true;
 
                 final String? text = msg['text'];
                 final String? mediaUrl = msg['media_url'];
                 final String? mediaType = msg['media_type'];
 
                 // ✅ NEW: shared post id
-                final String? sharedPostId =
-                msg['shared_post_id']?.toString();
+                final String? sharedPostId = msg['shared_post_id']?.toString();
 
                 final bool isSharedPost =
                     sharedPostId != null && sharedPostId.isNotEmpty;
 
-                final bool isImage = mediaType == "image" &&
-                    mediaUrl != null &&
-                    mediaUrl.isNotEmpty;
+                final bool isImage =
+                    mediaType == "image" && mediaUrl != null && mediaUrl.isNotEmpty;
 
                 final bool showSeen = isMe &&
                     lastMyMessage != null &&
@@ -492,16 +497,14 @@ class _ChatScreenState extends State<ChatScreen> {
                     msg['is_read'] == true;
 
                 return Column(
-                  crossAxisAlignment: isMe
-                      ? CrossAxisAlignment.end
-                      : CrossAxisAlignment.start,
+                  crossAxisAlignment:
+                  isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                   children: [
                     GestureDetector(
                       onLongPress: () async {
                         if (!isMe) return;
 
-                        final action =
-                        await showModalBottomSheet<String>(
+                        final action = await showModalBottomSheet<String>(
                           context: context,
                           builder: (_) => SafeArea(
                             child: Wrap(
@@ -509,8 +512,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                 ListTile(
                                   leading: const Icon(Icons.delete),
                                   title: const Text("Delete for me"),
-                                  onTap: () => Navigator.pop(
-                                      context, "delete_me"),
+                                  onTap: () => Navigator.pop(context, "delete_me"),
                                 ),
                                 ListTile(
                                   leading: const Icon(
@@ -519,8 +521,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                   ),
                                   title: const Text(
                                       "Unsend (delete for everyone)"),
-                                  onTap: () => Navigator.pop(
-                                      context, "unsend"),
+                                  onTap: () => Navigator.pop(context, "unsend"),
                                 ),
                               ],
                             ),
@@ -536,12 +537,10 @@ class _ChatScreenState extends State<ChatScreen> {
                         }
                       },
                       child: Align(
-                        alignment: isMe
-                            ? Alignment.centerRight
-                            : Alignment.centerLeft,
+                        alignment:
+                        isMe ? Alignment.centerRight : Alignment.centerLeft,
                         child: Container(
-                          margin: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 6),
+                          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                           padding: (isImage && !isUnsent)
                               ? const EdgeInsets.all(4)
                               : const EdgeInsets.all(12),
@@ -549,17 +548,18 @@ class _ChatScreenState extends State<ChatScreen> {
                             color: (isImage && !isUnsent)
                                 ? Colors.transparent
                                 : (isMe
-                                ? Colors.blue.withOpacity(0.8)
-                                : Colors.grey.shade300),
-                            borderRadius: BorderRadius.circular(14),
+                                ? Theme.of(context).colorScheme.primary
+                                : Colors.white),
+                            borderRadius: BorderRadius.circular(16),
+                            border: isMe
+                                ? null
+                                : Border.all(color: const Color(0xFFE5E7EB)),
                           ),
                           child: isUnsent
                               ? Text(
                             "Message unsent",
                             style: TextStyle(
-                              color: isMe
-                                  ? Colors.white
-                                  : Colors.black,
+                              color: isMe ? Colors.white : Colors.black,
                               fontStyle: FontStyle.italic,
                             ),
                           )
@@ -567,9 +567,7 @@ class _ChatScreenState extends State<ChatScreen> {
                               ? Text(
                             "Message deleted",
                             style: TextStyle(
-                              color: isMe
-                                  ? Colors.white
-                                  : Colors.black,
+                              color: isMe ? Colors.white : Colors.black,
                               fontStyle: FontStyle.italic,
                             ),
                           )
@@ -579,54 +577,46 @@ class _ChatScreenState extends State<ChatScreen> {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (_) =>
-                                      PostDetailScreen(
-                                        postId:
-                                        sharedPostId,
-                                      ),
+                                  builder: (_) => PostDetailScreen(
+                                    postId: sharedPostId,
+                                  ),
                                 ),
                               );
                             },
                             child: Container(
                               width: 220,
-                              padding:
-                              const EdgeInsets.all(
-                                  10),
+                              padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
                                 color: isMe
-                                    ? Colors.white
-                                    .withOpacity(
-                                    0.15)
+                                    ? Colors.white.withOpacity(0.18)
                                     : Colors.white,
-                                borderRadius:
-                                BorderRadius
-                                    .circular(12),
+                                borderRadius: BorderRadius.circular(12),
                                 border: Border.all(
-                                  color: Colors.black12,
+                                  color: const Color(0xFFE5E7EB),
                                 ),
                               ),
                               child: Row(
-                                children: const [
+                                children: [
                                   Icon(
-                                    Icons
-                                        .share_outlined,
+                                    Icons.share_outlined,
                                     size: 18,
-                                    color: Colors.white,
+                                    color: isMe
+                                        ? Colors.white
+                                        : Theme.of(context)
+                                        .colorScheme
+                                        .primary,
                                   ),
-                                  SizedBox(width: 8),
+                                  const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
                                       "Shared a post",
                                       style: TextStyle(
-                                        color: Colors
-                                            .white,
-                                        fontWeight:
-                                        FontWeight
-                                            .w500,
+                                        color: isMe
+                                            ? Colors.white
+                                            : Colors.black,
+                                        fontWeight: FontWeight.w600,
                                       ),
-                                      overflow:
-                                      TextOverflow
-                                          .ellipsis,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
                                 ],
@@ -635,32 +625,25 @@ class _ChatScreenState extends State<ChatScreen> {
                           )
                               : isImage
                               ? ClipRRect(
-                            borderRadius:
-                            BorderRadius
-                                .circular(14),
+                            borderRadius: BorderRadius.circular(14),
                             child: Image.network(
                               mediaUrl!,
                               width: 220,
                               height: 220,
                               fit: BoxFit.cover,
-                              errorBuilder:
-                                  (_, __, ___) =>
-                                  Container(
-                                    width: 220,
-                                    height: 220,
-                                    color: Colors
-                                        .grey[300],
-                                    child: const Icon(Icons
-                                        .broken_image),
-                                  ),
+                              errorBuilder: (_, __, ___) => Container(
+                                width: 220,
+                                height: 220,
+                                color: Colors.grey[300],
+                                child: const Icon(Icons.broken_image),
+                              ),
                             ),
                           )
                               : Text(
                             text ?? "",
                             style: TextStyle(
-                              color: isMe
-                                  ? Colors.white
-                                  : Colors.black,
+                              color: isMe ? Colors.white : Colors.black,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
                         ),
@@ -668,13 +651,13 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                     if (showSeen)
                       const Padding(
-                        padding: EdgeInsets.only(
-                            right: 16, top: 2, bottom: 6),
+                        padding: EdgeInsets.only(right: 16, top: 2, bottom: 6),
                         child: Text(
                           "Seen",
                           style: TextStyle(
                             fontSize: 12,
-                            color: Colors.grey,
+                            color: Color(0xFF475569), // ✅ not gray
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                       ),
@@ -686,8 +669,16 @@ class _ChatScreenState extends State<ChatScreen> {
           SafeArea(
             top: false,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              color: Colors.grey.shade100,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+
+              // ✅ cleaner input background
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                border: Border(
+                  top: BorderSide(color: Color(0xFFE5E7EB)),
+                ),
+              ),
+
               child: Row(
                 children: [
                   IconButton(
@@ -697,22 +688,37 @@ class _ChatScreenState extends State<ChatScreen> {
                       height: 18,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                        : const Icon(Icons.photo),
+                        : Icon(
+                      Icons.photo,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
                     onPressed: _uploadingImage ? null : _pickAndSendImage,
                   ),
                   Expanded(
-                    child: TextField(
-                      controller: _controller,
-                      textInputAction: TextInputAction.send,
-                      decoration: const InputDecoration(
-                        hintText: "Type a message...",
-                        border: InputBorder.none,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(22),
+                        border: Border.all(color: const Color(0xFFE5E7EB)),
                       ),
-                      onSubmitted: (_) => _sendMessage(),
+                      child: TextField(
+                        controller: _controller,
+                        textInputAction: TextInputAction.send,
+                        decoration: const InputDecoration(
+                          hintText: "Type a message...",
+                          border: InputBorder.none,
+                        ),
+                        onSubmitted: (_) => _sendMessage(),
+                      ),
                     ),
                   ),
+                  const SizedBox(width: 6),
                   IconButton(
-                    icon: const Icon(Icons.send),
+                    icon: Icon(
+                      Icons.send,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
                     onPressed: _sendMessage,
                   ),
                 ],
@@ -724,4 +730,3 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 }
-

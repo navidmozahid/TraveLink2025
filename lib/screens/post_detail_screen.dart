@@ -7,6 +7,7 @@ import '../services/comment_service.dart';
 import 'comments_screen.dart';
 import 'other_profile_screen.dart';
 import 'edit_post_screen.dart';
+import 'post_likes_screen.dart';
 
 class PostDetailScreen extends StatefulWidget {
   final String postId;
@@ -343,7 +344,19 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                               : _likeService.likePost(widget.postId);
                         },
                       ),
-                      if (likes.isNotEmpty) Text(likes.length.toString()),
+                      if (likes.isNotEmpty)
+                        GestureDetector(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    PostLikesScreen(postId: widget.postId),
+                              ),
+                            );
+                          },
+                          child: Text(likes.length.toString()),
+                        ),
                     ],
                   );
                 },
