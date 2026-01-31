@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/supabase_service.dart';
 import 'signup_screen.dart';
 import 'home_screen.dart';
@@ -106,7 +107,8 @@ class _LoginScreenState extends State<LoginScreen> {
           keyboardType: TextInputType.emailAddress,
           decoration: InputDecoration(
             labelText: "Email Address",
-            prefixIcon: const Icon(Icons.email_outlined, color: Color(0xFF023e8a)),
+            prefixIcon:
+            const Icon(Icons.email_outlined, color: Color(0xFF023e8a)),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
             ),
@@ -127,10 +129,13 @@ class _LoginScreenState extends State<LoginScreen> {
           obscureText: _obscurePassword,
           decoration: InputDecoration(
             labelText: "Password",
-            prefixIcon: const Icon(Icons.lock_outlined, color: Color(0xFF023e8a)),
+            prefixIcon:
+            const Icon(Icons.lock_outlined, color: Color(0xFF023e8a)),
             suffixIcon: IconButton(
               icon: Icon(
-                _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                _obscurePassword
+                    ? Icons.visibility_outlined
+                    : Icons.visibility_off_outlined,
                 color: const Color(0xFF023e8a),
               ),
               onPressed: () {
@@ -307,7 +312,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 : () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const BusinessLoginScreen()),
+                MaterialPageRoute(
+                    builder: (_) => const BusinessLoginScreen()),
               );
             },
             icon: const Icon(Icons.business_center),
@@ -374,10 +380,13 @@ class _LoginScreenState extends State<LoginScreen> {
               foregroundColor: Colors.white,
             ),
             onPressed: () async {
-              final emailController = TextEditingController(text: _emailController.text);
+              final emailController =
+              TextEditingController(text: _emailController.text);
               final email = emailController.text.trim();
 
-              if (email.isEmpty || !RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email)) {
+              if (email.isEmpty ||
+                  !RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
+                      .hasMatch(email)) {
                 _showToast("Please enter a valid email address", isError: true);
                 return;
               }
@@ -398,7 +407,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       await _supabaseService.resetPassword(email);
-      _showToast("✅ Password reset email sent! Check your inbox and follow the instructions.", isSuccess: true);
+      _showToast(
+        "✅ Password reset email sent! Check your inbox and follow the instructions.",
+        isSuccess: true,
+      );
     } catch (e) {
       String message = "Failed to send reset link. Please try again.";
       if (e.toString().contains("user not found")) {
@@ -412,7 +424,7 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _loading = false);
   }
 
-  // 🔹 Traveler Login Logic
+  // 🔹 Traveler Login Logic (✅ UPDATED: block business account login here)
   Future<void> _handleTravelerLogin() async {
     // Basic validation
     if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
@@ -420,7 +432,8 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(_emailController.text)) {
+    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
+        .hasMatch(_emailController.text)) {
       _showToast("Please enter a valid email address", isError: true);
       return;
     }
@@ -428,6 +441,35 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _loading = true);
 
     try {
+      // ✅ NEW: Check if this email belongs to business_accounts
+      final supabase = Supabase.instance.client;
+
+      final businessRow = await supabase
+          .from('business_accounts')
+          .select('id')
+          .eq('email', _emailController.text.trim())
+          .maybeSingle();
+
+      // ✅ If businessRow exists -> block login here
+      if (businessRow != null) {
+        setState(() => _loading = false);
+
+        _showToast(
+          "❌ This is a Business account. Please login from Business Portal.",
+          isError: true,
+        );
+
+        await Future.delayed(const Duration(milliseconds: 700));
+        if (!mounted) return;
+
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const BusinessLoginScreen()),
+        );
+        return;
+      }
+
+      // ✅ Normal traveler login
       final response = await _supabaseService.loginTraveler(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
@@ -438,11 +480,13 @@ class _LoginScreenState extends State<LoginScreen> {
       if (user != null) {
         if (user.emailConfirmedAt == null) {
           // Email not verified
-          _showToast("Please verify your email before logging in.", isError: true);
+          _showToast("Please verify your email before logging in.",
+              isError: true);
         } else {
           // ✅ Verified → go to HomeScreen
           _showToast("✅ Login successful!", isSuccess: true);
           await Future.delayed(const Duration(seconds: 1));
+          if (!mounted) return;
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (_) => const HomeScreen()),
@@ -462,7 +506,8 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _loading = false);
   }
 
-  void _showToast(String message, {bool isError = false, bool isSuccess = false}) {
+  void _showToast(String message,
+      {bool isError = false, bool isSuccess = false}) {
     Color backgroundColor = const Color(0xFF023e8a);
     if (isError) backgroundColor = Colors.red;
     if (isSuccess) backgroundColor = Colors.green;

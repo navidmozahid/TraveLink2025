@@ -3,7 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/supabase_agency_service.dart';
 import '../services/navigation_service.dart';
 import 'agency_signup_screen.dart';
-import 'business_home_screen.dart';
+import 'home_screen.dart';
 
 class BusinessLoginScreen extends StatefulWidget {
   const BusinessLoginScreen({super.key});
@@ -34,7 +34,8 @@ class _BusinessLoginScreenState extends State<BusinessLoginScreen> {
     if (currentUser != null) {
       try {
         final businessAccount = await _agencyService.getCurrentAgency();
-        _navigateToDashboard(businessAccount);
+        if (!mounted) return;
+        _navigateToFeed(businessAccount);
       } catch (e) {
         await _supabase.auth.signOut();
       }
@@ -67,7 +68,6 @@ class _BusinessLoginScreenState extends State<BusinessLoginScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const SizedBox(height: 40),
-
                   const Center(
                     child: Column(
                       children: [
@@ -91,9 +91,7 @@ class _BusinessLoginScreenState extends State<BusinessLoginScreen> {
                       ],
                     ),
                   ),
-
                   const SizedBox(height: 40),
-
                   TextFormField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
@@ -115,15 +113,14 @@ class _BusinessLoginScreenState extends State<BusinessLoginScreen> {
                       if (value == null || value.isEmpty) {
                         return 'Please enter your email address';
                       }
-                      if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+                      if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
+                          .hasMatch(value)) {
                         return 'Please enter a valid email address';
                       }
                       return null;
                     },
                   ),
-
                   const SizedBox(height: 20),
-
                   TextFormField(
                     controller: _passwordController,
                     obscureText: _obscurePassword,
@@ -164,9 +161,7 @@ class _BusinessLoginScreenState extends State<BusinessLoginScreen> {
                       return null;
                     },
                   ),
-
                   const SizedBox(height: 16),
-
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -199,9 +194,7 @@ class _BusinessLoginScreenState extends State<BusinessLoginScreen> {
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 30),
-
                   SizedBox(
                     width: double.infinity,
                     height: 56,
@@ -221,7 +214,9 @@ class _BusinessLoginScreenState extends State<BusinessLoginScreen> {
                         width: 20,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.white,
+                          ),
                         ),
                       )
                           : const Text(
@@ -233,9 +228,7 @@ class _BusinessLoginScreenState extends State<BusinessLoginScreen> {
                       ),
                     ),
                   ),
-
                   const SizedBox(height: 30),
-
                   Row(
                     children: [
                       Expanded(
@@ -262,9 +255,7 @@ class _BusinessLoginScreenState extends State<BusinessLoginScreen> {
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 24),
-
                   SizedBox(
                     width: double.infinity,
                     height: 56,
@@ -296,13 +287,11 @@ class _BusinessLoginScreenState extends State<BusinessLoginScreen> {
                       ),
                     ),
                   ),
-
                   const SizedBox(height: 40),
                 ],
               ),
             ),
           ),
-
           if (_isLoading)
             Container(
               color: Colors.black.withOpacity(0.3),
@@ -344,8 +333,9 @@ class _BusinessLoginScreenState extends State<BusinessLoginScreen> {
       }
 
       await Future.delayed(const Duration(seconds: 1));
-      _navigateToDashboard(response['businessAccount'] as Map<String, dynamic>);
+      if (!mounted) return;
 
+      _navigateToFeed(response['businessAccount'] as Map<String, dynamic>);
     } catch (e) {
       setState(() {
         _isLoading = false;
@@ -354,7 +344,7 @@ class _BusinessLoginScreenState extends State<BusinessLoginScreen> {
     }
   }
 
-  void _navigateToDashboard(Map<String, dynamic> businessAccount) {
+  void _navigateToFeed(Map<String, dynamic> businessAccount) {
     final status = businessAccount['status'] as String;
     final user = _supabase.auth.currentUser;
 
@@ -363,15 +353,12 @@ class _BusinessLoginScreenState extends State<BusinessLoginScreen> {
       return;
     }
 
+    // ✅ Business user goes to SAME FEED but Dashboard replaces Explore
     NavigationService.navigateTo(
       context,
-      BusinessHomeScreen(
-        user: user,
-        businessAccount: businessAccount,
-      ),
+      const HomeScreen(isBusinessAccount: true),
     );
 
-    // Show status message
     if (status == 'pending') {
       _showToast("Your account is pending approval", isSuccess: false);
     } else if (status == 'approved') {
@@ -407,7 +394,10 @@ class _BusinessLoginScreenState extends State<BusinessLoginScreen> {
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(context);
-              _showToast("Password reset link sent to your email", isSuccess: true);
+              _showToast(
+                "Password reset link sent to your email",
+                isSuccess: true,
+              );
             },
             child: const Text("Send Link"),
           ),
@@ -416,7 +406,8 @@ class _BusinessLoginScreenState extends State<BusinessLoginScreen> {
     );
   }
 
-  void _showToast(String message, {bool isError = false, bool isSuccess = false}) {
+  void _showToast(String message,
+      {bool isError = false, bool isSuccess = false}) {
     Color backgroundColor = const Color(0xFF023e8a);
     if (isError) backgroundColor = Colors.red;
     if (isSuccess) backgroundColor = Colors.green;

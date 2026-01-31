@@ -116,8 +116,7 @@ class _SignupScreenState extends State<SignupScreen> {
                 validator: (value) =>
                 value == null ? "Select your country" : null,
                 items: _countries
-                    .map((c) =>
-                    DropdownMenuItem(value: c, child: Text(c)))
+                    .map((c) => DropdownMenuItem(value: c, child: Text(c)))
                     .toList(),
               ),
               const SizedBox(height: 30),
@@ -138,24 +137,33 @@ class _SignupScreenState extends State<SignupScreen> {
                       country: _selectedCountry!,
                     );
 
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                            "Signup successful. Please check your email."),
-                      ),
-                    );
+                    if (!mounted) return;
 
+                    // ✅ Navigate to login + show message there
                     Navigator.pushReplacement(
                       context,
                       MaterialPageRoute(
-                          builder: (_) => const LoginScreen()),
+                        builder: (_) => const LoginScreen(),
+                      ),
                     );
+
+                    // ✅ Show toast/snackbar after reaching login page
+                    Future.delayed(const Duration(milliseconds: 300), () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            "Please wait a minute and check your email for verification.",
+                          ),
+                        ),
+                      );
+                    });
                   } catch (e) {
+                    if (!mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(content: Text(e.toString())),
                     );
                   } finally {
-                    setState(() => _loading = false);
+                    if (mounted) setState(() => _loading = false);
                   }
                 },
                 style: ElevatedButton.styleFrom(
@@ -168,7 +176,9 @@ class _SignupScreenState extends State<SignupScreen> {
                     : const Text(
                   "Sign Up",
                   style: TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.bold),
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ],

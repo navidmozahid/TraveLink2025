@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import '../services/auth_service.dart'; // Fixed import path
+import '../services/auth_service.dart';
 import 'welcome_screen.dart';
 import 'home_screen.dart';
-import 'business_home_screen.dart';
 
 class RootScreen extends StatefulWidget {
   const RootScreen({super.key});
@@ -28,33 +26,20 @@ class _RootScreenState extends State<RootScreen> {
 
       if (session['isLoggedIn'] == true) {
         final userType = session['userType'] as String;
-        final user = session['user'] as User;
 
-        if (userType == 'business') {
-          final businessAccount = session['businessAccount'] as Map<String, dynamic>;
-          // Navigate to business home
-          if (mounted) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (_) => BusinessHomeScreen(
-                  user: user,
-                  businessAccount: businessAccount,
-                ),
+        // ✅ Traveler -> normal HomeScreen (Explore visible)
+        // ✅ Business -> HomeScreen but Dashboard replaces Explore
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) => HomeScreen(
+                isBusinessAccount: userType == "business",
               ),
-            );
-          }
-        } else {
-          // Navigate to traveler home
-          if (mounted) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => const HomeScreen()),
-            );
-          }
+            ),
+          );
         }
       } else {
-        // Navigate to welcome screen
         if (mounted) {
           Navigator.pushReplacement(
             context,
@@ -63,7 +48,6 @@ class _RootScreenState extends State<RootScreen> {
         }
       }
     } catch (e) {
-      // If any error, go to welcome screen
       if (mounted) {
         Navigator.pushReplacement(
           context,

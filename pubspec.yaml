@@ -16,6 +16,9 @@ dependencies:
   # 🔹 Supabase
   supabase_flutter: ^2.10.1
 
+  file_picker: ^8.0.0
+
+
   # 🔹 Media & uploads
   image_picker: ^1.0.7
   uuid: ^4.3.3

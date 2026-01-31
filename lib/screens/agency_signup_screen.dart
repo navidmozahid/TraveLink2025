@@ -1,4 +1,9 @@
+import 'dart:typed_data';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../services/supabase_agency_service.dart';
 import 'business_login_screen.dart';
 
@@ -19,18 +24,26 @@ class _AgencySignupScreenState extends State<AgencySignupScreen> {
   final _licenseController = TextEditingController();
 
   String? _agencyType;
+
+  // ✅ store uploaded storage paths
   List<String> _uploadedDocs = [];
+
   bool _isLoading = false;
   bool _obscurePassword = true;
 
+  // ✅ clean business types (NO MIXED)
   final List<String> _agencyTypes = [
-    "Tour Operator",
-    "Hotel Partner",
-    "Transport",
-    "Mixed",
+    "Travel Agency",
+    "Hotel",
+    "Car Rental",
+    "Ticket Seller",
+    "Experiences",
   ];
 
   final SupabaseAgencyService _agencyService = SupabaseAgencyService();
+  final SupabaseClient _supabase = Supabase.instance.client;
+
+  static const String _docsBucket = "business-docs";
 
   @override
   Widget build(BuildContext context) {
@@ -85,7 +98,8 @@ class _AgencySignupScreenState extends State<AgencySignupScreen> {
                       if (value == null || value.isEmpty) {
                         return 'Please enter email';
                       }
-                      if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+                      if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
+                          .hasMatch(value)) {
                         return 'Please enter a valid email address';
                       }
                       return null;
@@ -113,7 +127,9 @@ class _AgencySignupScreenState extends State<AgencySignupScreen> {
                       prefixIcon: Icon(Icons.lock, color: Colors.grey[600]),
                       suffixIcon: IconButton(
                         icon: Icon(
-                          _obscurePassword ? Icons.visibility : Icons.visibility_off,
+                          _obscurePassword
+                              ? Icons.visibility
+                              : Icons.visibility_off,
                           color: Colors.grey[600],
                         ),
                         onPressed: () {
@@ -128,11 +144,15 @@ class _AgencySignupScreenState extends State<AgencySignupScreen> {
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: Color(0xFF023e8a), width: 2),
+                        borderSide: const BorderSide(
+                          color: Color(0xFF023e8a),
+                          width: 2,
+                        ),
                       ),
                       errorBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: Colors.red, width: 1),
+                        borderSide:
+                        const BorderSide(color: Colors.red, width: 1),
                       ),
                     ),
                   ),
@@ -197,11 +217,15 @@ class _AgencySignupScreenState extends State<AgencySignupScreen> {
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: Color(0xFF023e8a), width: 2),
+                        borderSide: const BorderSide(
+                          color: Color(0xFF023e8a),
+                          width: 2,
+                        ),
                       ),
                       errorBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: Colors.red, width: 1),
+                        borderSide:
+                        const BorderSide(color: Colors.red, width: 1),
                       ),
                     ),
                     hint: const Text("Select Agency Type"),
@@ -218,10 +242,12 @@ class _AgencySignupScreenState extends State<AgencySignupScreen> {
                       });
                     },
                     items: _agencyTypes
-                        .map((type) => DropdownMenuItem(
-                      value: type,
-                      child: Text(type),
-                    ))
+                        .map(
+                          (type) => DropdownMenuItem(
+                        value: type,
+                        child: Text(type),
+                      ),
+                    )
                         .toList(),
                   ),
                   const SizedBox(height: 20),
@@ -279,33 +305,44 @@ class _AgencySignupScreenState extends State<AgencySignupScreen> {
                               ),
                             ),
                             const SizedBox(height: 8),
-                            ..._uploadedDocs.asMap().entries.map((entry) => Card(
-                              margin: const EdgeInsets.symmetric(vertical: 4),
-                              child: ListTile(
-                                dense: true,
-                                leading: const Icon(Icons.insert_drive_file, color: Colors.blue),
-                                title: Text(
-                                  entry.value,
-                                  style: const TextStyle(fontSize: 14),
-                                ),
-                                trailing: IconButton(
-                                  icon: const Icon(Icons.delete, color: Colors.red, size: 20),
-                                  onPressed: _isLoading
-                                      ? null
-                                      : () {
-                                    setState(() {
-                                      _uploadedDocs.removeAt(entry.key);
-                                    });
-                                    _showToast("Document removed");
-                                  },
+                            ..._uploadedDocs.asMap().entries.map(
+                                  (entry) => Card(
+                                margin:
+                                const EdgeInsets.symmetric(vertical: 4),
+                                child: ListTile(
+                                  dense: true,
+                                  leading: const Icon(
+                                    Icons.insert_drive_file,
+                                    color: Colors.blue,
+                                  ),
+                                  title: Text(
+                                    entry.value,
+                                    style: const TextStyle(fontSize: 14),
+                                  ),
+                                  trailing: IconButton(
+                                    icon: const Icon(
+                                      Icons.delete,
+                                      color: Colors.red,
+                                      size: 20,
+                                    ),
+                                    onPressed: _isLoading
+                                        ? null
+                                        : () {
+                                      setState(() {
+                                        _uploadedDocs.removeAt(entry.key);
+                                      });
+                                      _showToast("Document removed");
+                                    },
+                                  ),
                                 ),
                               ),
-                            )),
+                            ),
                           ],
                         ],
                       ),
                     ),
                   ),
+
                   const SizedBox(height: 30),
 
                   // Register Button
@@ -328,12 +365,17 @@ class _AgencySignupScreenState extends State<AgencySignupScreen> {
                         width: 20,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.white,
+                          ),
                         ),
                       )
                           : const Text(
                         "Register Agency",
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ),
@@ -350,7 +392,10 @@ class _AgencySignupScreenState extends State<AgencySignupScreen> {
                             : () {
                           Navigator.pushReplacement(
                             context,
-                            MaterialPageRoute(builder: (_) => const BusinessLoginScreen()),
+                            MaterialPageRoute(
+                              builder: (_) =>
+                              const BusinessLoginScreen(),
+                            ),
                           );
                         },
                         child: const Text(
@@ -384,7 +429,6 @@ class _AgencySignupScreenState extends State<AgencySignupScreen> {
   }
 
   void _registerAgency() async {
-    // Validate form
     if (!_formKey.currentState!.validate()) {
       _showToast("Please fix the errors above", isError: true);
       return;
@@ -400,7 +444,7 @@ class _AgencySignupScreenState extends State<AgencySignupScreen> {
     });
 
     try {
-      final response = await _agencyService.signUpAgency(
+      await _agencyService.signUpAgency(
         email: _emailController.text,
         password: _passwordController.text,
         agencyName: _agencyNameController.text,
@@ -415,78 +459,114 @@ class _AgencySignupScreenState extends State<AgencySignupScreen> {
         _isLoading = false;
       });
 
-      _showToast("✅ Registration successful! Please check your email for verification.", isSuccess: true);
+      if (!mounted) return;
 
-      await Future.delayed(const Duration(seconds: 2));
-
+      // ✅ Navigate to Agency Login Page
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const BusinessLoginScreen()),
       );
+
+      // ✅ Show message on login screen (like traveler signup flow)
+      Future.delayed(const Duration(milliseconds: 300), () {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              "Please wait a minute and check your email for verification.",
+            ),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      });
     } catch (e) {
       setState(() {
         _isLoading = false;
       });
 
-      String errorMessage = "Registration failed. Please try again.";
-      if (e.toString().contains("User already registered")) {
-        errorMessage = "Email already registered. Please login or use a different email.";
-      } else if (e.toString().contains("Invalid email")) {
-        errorMessage = "Please enter a valid email address.";
-      } else if (e.toString().contains("network") || e.toString().contains("connection")) {
-        errorMessage = "Network error. Please check your connection.";
-      }
-
-      _showToast("❌ $errorMessage", isError: true);
+      _showToast("❌ ${e.toString()}", isError: true);
     }
   }
 
-  void _uploadDocument() {
-    // Simulate document upload - replace with actual file picker
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Upload Document"),
-        content: const Text("Choose document type:"),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _addDocument("Business License");
-            },
-            child: const Text("Business License"),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _addDocument("Registration Certificate");
-            },
-            child: const Text("Registration Certificate"),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _addDocument("Tax ID Certificate");
-            },
-            child: const Text("Tax ID Certificate"),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel"),
-          ),
-        ],
-      ),
-    );
+  Future<void> _uploadDocument() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowMultiple: false,
+        withData: true,
+        allowedExtensions: ['pdf', 'png', 'jpg', 'jpeg'],
+      );
+
+      if (result == null) {
+        return;
+      }
+
+      final file = result.files.single;
+
+      final Uint8List? bytes = file.bytes;
+      final String originalName = file.name ?? "";
+
+      if (bytes == null) {
+        _showToast("❌ Failed to read file. Try again.", isError: true);
+        return;
+      }
+
+      if (originalName.trim().isEmpty) {
+        _showToast("❌ Invalid file selected.", isError: true);
+        return;
+      }
+
+      setState(() {
+        _isLoading = true;
+      });
+
+      final String extension = originalName.contains('.')
+          ? originalName.split('.').last.toLowerCase()
+          : "";
+
+      final safeName = originalName.replaceAll(' ', '_');
+
+      final String path =
+          "agency_docs/${DateTime.now().millisecondsSinceEpoch}_$safeName";
+
+      await _supabase.storage.from(_docsBucket).uploadBinary(
+        path,
+        bytes,
+        fileOptions: FileOptions(
+          upsert: true,
+          contentType: _getMimeType(extension),
+        ),
+      );
+
+      setState(() {
+        _uploadedDocs.add(path);
+        _isLoading = false;
+      });
+
+      _showToast("✅ Document uploaded", isSuccess: true);
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+      _showToast("❌ Upload failed: $e", isError: true);
+    }
   }
 
-  void _addDocument(String type) {
-    setState(() {
-      _uploadedDocs.add("${type}_${DateTime.now().millisecondsSinceEpoch}.pdf");
-    });
-    _showToast("📄 $type added");
+  String _getMimeType(String extension) {
+    switch (extension) {
+      case 'pdf':
+        return 'application/pdf';
+      case 'png':
+        return 'image/png';
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      default:
+        return 'application/octet-stream';
+    }
   }
 
-  void _showToast(String message, {bool isError = false, bool isSuccess = false}) {
+  void _showToast(String message,
+      {bool isError = false, bool isSuccess = false}) {
     Color backgroundColor = const Color(0xFF023e8a);
     if (isError) backgroundColor = Colors.red;
     if (isSuccess) backgroundColor = Colors.green;

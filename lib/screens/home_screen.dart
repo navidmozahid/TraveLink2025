@@ -12,7 +12,7 @@ import 'inbox_screen.dart';
 import 'post_likes_screen.dart';
 import 'saved_posts_screen.dart';
 import 'explore_screen.dart';
-
+import 'business_dashboard_screen.dart';
 
 import '../services/post_service.dart';
 import '../services/follow_service.dart';
@@ -22,7 +22,12 @@ import '../widgets/feed_video_player.dart';
 import '../widgets/share_post_sheet.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final bool isBusinessAccount;
+
+  const HomeScreen({
+    super.key,
+    this.isBusinessAccount = false,
+  });
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -397,7 +402,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
                 // ✅ BOOKMARK SAVE
                 StreamBuilder<List<Map<String, dynamic>>>(
-                  stream: _supabase.from('saved_posts').stream(primaryKey: ['id']),
+                  stream: _supabase
+                      .from('saved_posts')
+                      .stream(primaryKey: ['id']),
                   builder: (_, snap) {
                     final rows = snap.data ?? [];
                     final myId = currentUser?.id;
@@ -507,12 +514,20 @@ class _HomeScreenState extends State<HomeScreen> {
             itemBuilder: (_, i) => _buildPost(_posts[i]),
           ),
         );
+
       case 1:
-        return const ExploreScreen();
+      // ✅ Traveler -> Explore
+      // ✅ Business -> Dashboard
+        return widget.isBusinessAccount
+            ? const BusinessDashboardScreen()
+            : const ExploreScreen();
+
       case 2:
         return const InboxScreen();
+
       case 3:
         return const ProfileScreen();
+
       default:
         return const SizedBox();
     }
@@ -553,7 +568,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           child: Text(
                             count.toString(),
                             style: const TextStyle(
-                                color: Colors.white, fontSize: 10),
+                              color: Colors.white,
+                              fontSize: 10,
+                            ),
                           ),
                         ),
                       ),
@@ -590,13 +607,27 @@ class _HomeScreenState extends State<HomeScreen> {
           currentIndex: _currentIndex,
           type: BottomNavigationBarType.fixed,
           onTap: (i) => setState(() => _currentIndex = i),
-          items: const [
-            BottomNavigationBarItem(icon: Icon(Icons.home), label: "Home"),
+          items: [
+            const BottomNavigationBarItem(
+              icon: Icon(Icons.home),
+              label: "Home",
+            ),
             BottomNavigationBarItem(
-                icon: Icon(Icons.explore_outlined), label: "Explore"),
-            BottomNavigationBarItem(
-                icon: Icon(Icons.chat_bubble_outline), label: "Messages"),
-            BottomNavigationBarItem(icon: Icon(Icons.person), label: "Profile"),
+              icon: Icon(
+                widget.isBusinessAccount
+                    ? Icons.dashboard_outlined
+                    : Icons.explore_outlined,
+              ),
+              label: widget.isBusinessAccount ? "Dashboard" : "Explore",
+            ),
+            const BottomNavigationBarItem(
+              icon: Icon(Icons.chat_bubble_outline),
+              label: "Messages",
+            ),
+            const BottomNavigationBarItem(
+              icon: Icon(Icons.person),
+              label: "Profile",
+            ),
           ],
         ),
       ),
