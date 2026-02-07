@@ -93,7 +93,7 @@ class PostService {
     }
   }
 
-  // ================= FETCH FEED POSTS =================
+  // ================= FETCH FEED POSTS (✅ FIXED ONLY WHERE NEEDED) =================
   Future<List<Map<String, dynamic>>> fetchPosts() async {
     final posts = await supabase
         .from('posts')
@@ -105,13 +105,24 @@ class PostService {
     final postIds = posts.map((p) => p['id']).toList();
     final userIds = posts.map((p) => p['user_id']).toSet().toList();
 
-    final profiles = await supabase
-        .from('profiles')
-        .select('id, name, avatar_url')
+    // Travelers + user type
+    final users = await supabase
+        .from('app_users')
+        .select('id, name, avatar_url, user_type')
         .inFilter('id', userIds);
 
-    final profileMap = {
-      for (final p in profiles) p['id']: p,
+    // Business accounts
+    final businesses = await supabase
+        .from('business_accounts')
+        .select('id, agency_name, logo_url')
+        .inFilter('id', userIds);
+
+    final Map<String, dynamic> userMap = {
+      for (final u in users) u['id']: u,
+    };
+
+    final Map<String, dynamic> businessMap = {
+      for (final b in businesses) b['id']: b,
     };
 
     final media = await supabase
@@ -125,9 +136,21 @@ class PostService {
     }
 
     return posts.map<Map<String, dynamic>>((post) {
+      final user = userMap[post['user_id']];
+      final bool isBusiness = user?['user_type'] == 'agency';
+
       return {
         ...post,
-        'profiles': profileMap[post['user_id']],
+
+        // 🔴 THIS LINE IS THE KEY FIX (DO NOT REMOVE)
+        'user_type': user?['user_type'],
+
+        // Traveler profile (unchanged)
+        'profiles': !isBusiness ? user : null,
+
+        // Business profile (used by feed)
+        'author': isBusiness ? businessMap[post['user_id']] : null,
+
         'post_media': mediaMap[post['id']] ?? [],
       };
     }).toList();
@@ -143,7 +166,7 @@ class PostService {
         .select('id, media_url, caption, location, created_at')
         .eq('user_id', user.id)
         .order('created_at', ascending: false)
-        .limit(100); // 🔥 FORCE FRESH DATA
+        .limit(100);
 
     if (posts.isEmpty) return [];
 
@@ -189,7 +212,6 @@ class PostService {
     final user = supabase.auth.currentUser;
     if (user == null) throw Exception('User not logged in');
 
-    // ✅✅✅ FIXED PART: Update caption/location with correct filter + select()
     final updatedPost = await supabase
         .from('posts')
         .update({
@@ -197,15 +219,14 @@ class PostService {
       'location': location,
     })
         .eq('id', postId)
-        .eq('user_id', user.id) // ✅ IMPORTANT for RLS + safe update
+        .eq('user_id', user.id)
         .select()
         .maybeSingle();
 
     if (updatedPost == null) {
-      throw Exception('Post update failed (RLS blocked or post not found)');
+      throw Exception('Post update failed');
     }
 
-    // ✅ REMOVE MEDIA
     for (final media in removedMedia) {
       final mediaUrl = media['media_url'] as String;
       final path = Uri.parse(mediaUrl)
@@ -217,7 +238,6 @@ class PostService {
       await supabase.from('post_media').delete().eq('id', media['id']);
     }
 
-    // ✅ ADD NEW MEDIA
     for (final file in newMediaFiles) {
       final ext = file.path.split('.').last.toLowerCase();
       final filePath = '${user.id}/${postId}_${_uuid.v4()}.$ext';
@@ -228,7 +248,8 @@ class PostService {
         fileOptions: const FileOptions(upsert: true),
       );
 
-      final publicUrl = supabase.storage.from(_bucket).getPublicUrl(filePath);
+      final publicUrl =
+      supabase.storage.from(_bucket).getPublicUrl(filePath);
 
       await supabase.from('post_media').insert({
         'post_id': postId,

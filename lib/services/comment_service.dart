@@ -1,11 +1,12 @@
+import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'notification_service.dart';
 
 class CommentService {
-  final supabase = Supabase.instance.client;
+  final SupabaseClient supabase = Supabase.instance.client;
   final NotificationService _notificationService = NotificationService();
 
-  // ================= STREAM COMMENTS (REALTIME + PROFILES) =================
+  // ================= STREAM COMMENTS =================
   Stream<List<Map<String, dynamic>>> streamComments(String postId) {
     return supabase
         .from('comments')
@@ -18,19 +19,47 @@ class CommentService {
       final userIds =
       comments.map((c) => c['user_id'] as String).toSet().toList();
 
-      final profiles = await supabase
-          .from('profiles')
-          .select('id, name, avatar_url')
+      // 🔹 MODIFIED: added user_type (nothing removed)
+      final users = await supabase
+          .from('app_users')
+          .select('id, name, avatar_url, user_type')
           .inFilter('id', userIds);
 
-      final profileMap = {
-        for (final p in profiles) p['id']: p,
+      final userMap = {
+        for (final u in users) u['id']: u,
+      };
+
+      // 🔹 ADDED: fetch business accounts for agency comments
+      final businesses = await supabase
+          .from('business_accounts')
+          .select('id, agency_name, logo_url')
+          .inFilter('id', userIds);
+
+      final businessMap = {
+        for (final b in businesses) b['id']: b,
       };
 
       return comments.map((c) {
+        final u = userMap[c['user_id']];
+        final bool isBusiness = u?['user_type'] == 'agency';
+
         return {
           ...c,
-          'profiles': profileMap[c['user_id']],
+
+          // 🔹 expose user_type for UI
+          'user_type': u?['user_type'],
+
+          // 🔹 traveler profile (unchanged behavior)
+          'profiles': !isBusiness && u != null
+              ? {
+            'id': u['id'],
+            'name': u['name'],
+            'avatar_url': u['avatar_url'],
+          }
+              : null,
+
+          // 🔹 business profile for comments
+          'author': isBusiness ? businessMap[c['user_id']] : null,
         };
       }).toList();
     });
@@ -45,16 +74,12 @@ class CommentService {
     final user = supabase.auth.currentUser;
     if (user == null) return;
 
-    final inserted = await supabase
-        .from('comments')
-        .insert({
+    final inserted = await supabase.from('comments').insert({
       'post_id': postId,
       'user_id': user.id,
       'content': content,
       'parent_id': parentId,
-    })
-        .select()
-        .maybeSingle();
+    }).select().maybeSingle();
 
     if (inserted == null) return;
 
@@ -67,7 +92,6 @@ class CommentService {
     if (post == null) return;
     final postOwnerId = post['user_id'];
 
-    // 🔔 notify post owner
     if (postOwnerId != user.id) {
       await _notificationService.createNotification(
         userId: postOwnerId,
@@ -77,7 +101,6 @@ class CommentService {
       );
     }
 
-    // 🔔 notify replied comment owner
     if (parentId != null) {
       final parent = await supabase
           .from('comments')
@@ -103,37 +126,71 @@ class CommentService {
     return supabase
         .from('comment_likes')
         .stream(primaryKey: ['id'])
-        .eq('comment_id', commentId);
+        .eq('comment_id', commentId)
+        .asyncMap((likes) async {
+      if (likes.isEmpty) return [];
+
+      final userIds =
+      likes.map((l) => l['user_id'] as String).toSet().toList();
+
+      final users = await supabase
+          .from('app_users')
+          .select('id, name, avatar_url, user_type')
+          .inFilter('id', userIds);
+
+      final userMap = {
+        for (final u in users) u['id']: u,
+      };
+
+      return likes.map((l) {
+        final u = userMap[l['user_id']];
+        return {
+          ...l,
+          'profiles': u == null
+              ? null
+              : {
+            'id': u['id'],
+            'name': u['name'],
+            'avatar_url': u['avatar_url'],
+            'user_type': u['user_type'],
+          },
+        };
+      }).toList();
+    });
   }
 
+  // ================= LIKE COMMENT =================
   Future<void> likeComment(String commentId) async {
     final user = supabase.auth.currentUser;
     if (user == null) return;
 
-    final exists = await supabase
-        .from('comment_likes')
-        .select('id')
-        .eq('comment_id', commentId)
-        .eq('user_id', user.id)
-        .maybeSingle();
+    final res = await supabase.from('comment_likes').upsert(
+      {
+        'comment_id': commentId,
+        'user_id': user.id,
+      },
+      onConflict: 'comment_id,user_id',
+    );
 
-    if (exists != null) return;
-
-    await supabase.from('comment_likes').insert({
-      'comment_id': commentId,
-      'user_id': user.id,
-    });
+    if (res.error != null) {
+      debugPrint('LIKE COMMENT ERROR: ${res.error!.message}');
+    }
   }
 
+  // ================= UNLIKE COMMENT =================
   Future<void> unlikeComment(String commentId) async {
     final user = supabase.auth.currentUser;
     if (user == null) return;
 
-    await supabase
+    final res = await supabase
         .from('comment_likes')
         .delete()
         .eq('comment_id', commentId)
         .eq('user_id', user.id);
+
+    if (res.error != null) {
+      debugPrint('UNLIKE COMMENT ERROR: ${res.error!.message}');
+    }
   }
 
   // ================= UPDATE COMMENT =================
@@ -152,7 +209,6 @@ class CommentService {
   }
 
   // ================= DELETE COMMENT =================
-  // ✅ comment owner OR post owner
   Future<void> deleteComment(String commentId) async {
     final user = supabase.auth.currentUser;
     if (user == null) return;
@@ -179,7 +235,7 @@ class CommentService {
     }
   }
 
-  // ================= COMMENT COUNT (FIXES YOUR ERROR) =================
+  // ================= COMMENT COUNT =================
   Future<int> countComments(String postId) async {
     final data = await supabase
         .from('comments')
@@ -189,7 +245,7 @@ class CommentService {
     return data.length;
   }
 
-  // ================= REALTIME COMMENT COUNT (OPTIONAL) =================
+  // ================= REALTIME COMMENT COUNT =================
   Stream<int> streamCommentCount(String postId) {
     return supabase
         .from('comments')

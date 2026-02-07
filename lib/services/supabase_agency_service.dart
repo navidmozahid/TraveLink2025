@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SupabaseAgencyService {
@@ -26,7 +28,6 @@ class SupabaseAgencyService {
         throw Exception('Invalid agency type');
       }
 
-      // ✅ Signup user (store business info inside user metadata)
       final AuthResponse authResponse = await supabase.auth.signUp(
         email: email.trim(),
         password: password,
@@ -44,11 +45,6 @@ class SupabaseAgencyService {
       if (authResponse.user == null) {
         throw Exception("User creation failed");
       }
-
-      // ✅ IMPORTANT:
-      // We do NOT insert into business_accounts here anymore.
-      // Because email confirmation ON + RLS blocks insert.
-      // Trigger will auto insert.
 
       return {
         'success': true,
@@ -127,5 +123,87 @@ class SupabaseAgencyService {
         .single();
 
     return businessAccount;
+  }
+
+  // =========================================================
+  // BUSINESS PROFILE
+  // =========================================================
+
+  Future<Map<String, dynamic>> getMyBusinessProfile() async {
+    final user = supabase.auth.currentUser;
+    if (user == null) throw Exception("Not authenticated");
+
+    return await supabase
+        .from('business_accounts')
+        .select()
+        .eq('id', user.id)
+        .single();
+  }
+
+  Future<Map<String, dynamic>> getBusinessProfileById(String businessId) async {
+    return await supabase
+        .from('business_accounts')
+        .select()
+        .eq('id', businessId)
+        .single();
+  }
+
+  Future<void> updateBusinessProfile({
+    String? description,
+    String? city,
+    String? country,
+    String? phone,
+    String? email,
+    String? address,
+  }) async {
+    final user = supabase.auth.currentUser;
+    if (user == null) throw Exception("Not authenticated");
+
+    final updates = <String, dynamic>{};
+
+    if (description != null) updates['description'] = description;
+    if (city != null) updates['city'] = city;
+    if (country != null) updates['country'] = country;
+    if (phone != null) updates['phone'] = phone;
+    if (email != null) updates['email'] = email;
+    if (address != null) updates['address'] = address;
+
+    if (updates.isEmpty) return;
+
+    await supabase
+        .from('business_accounts')
+        .update(updates)
+        .eq('id', user.id);
+  }
+
+  /// ✅ Upload business LOGO (WORKING FIX)
+  Future<String> uploadBusinessLogo(File file) async {
+    final user = supabase.auth.currentUser;
+    if (user == null) throw Exception("Not authenticated");
+
+    final path = 'logos/${user.id}.jpg';
+
+    await supabase.storage
+        .from('business-media')
+        .upload(
+      path,
+      file,
+      fileOptions: const FileOptions(upsert: true),
+    );
+
+    final url =
+    supabase.storage.from('business-media').getPublicUrl(path);
+
+    await supabase
+        .from('business_accounts')
+        .update({'logo_url': url})
+        .eq('id', user.id);
+
+    return url;
+  }
+
+  Future<String> uploadBusinessCover(File file) async {
+    throw Exception(
+        'Cover image is not supported for business accounts.');
   }
 }

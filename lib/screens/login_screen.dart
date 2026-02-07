@@ -17,6 +17,8 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   final SupabaseService _supabaseService = SupabaseService();
 
+  final SupabaseClient _supabase = Supabase.instance.client;
+
   bool _loading = false;
   bool _obscurePassword = true;
 
@@ -37,9 +39,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
               // Login Form
               _buildLoginForm(),
-              const SizedBox(height: 8), // Reduced space
+              const SizedBox(height: 8),
 
-              // Forgot Password - MOVED HERE
+              // Forgot Password
               _buildForgotPassword(),
               const SizedBox(height: 24),
 
@@ -330,7 +332,6 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // 🔹 Forgot Password Dialog
   void _showForgotPasswordDialog() {
     showDialog(
       context: context,
@@ -401,7 +402,6 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // 🔹 Forgot Password Logic
   Future<void> _handleForgotPassword(String email) async {
     setState(() => _loading = true);
 
@@ -424,9 +424,8 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _loading = false);
   }
 
-  // 🔹 Traveler Login Logic (✅ UPDATED: block business account login here)
+  // ✅ Traveler Login Logic (UPDATED)
   Future<void> _handleTravelerLogin() async {
-    // Basic validation
     if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
       _showToast("Please fill in all fields", isError: true);
       return;
@@ -441,35 +440,6 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _loading = true);
 
     try {
-      // ✅ NEW: Check if this email belongs to business_accounts
-      final supabase = Supabase.instance.client;
-
-      final businessRow = await supabase
-          .from('business_accounts')
-          .select('id')
-          .eq('email', _emailController.text.trim())
-          .maybeSingle();
-
-      // ✅ If businessRow exists -> block login here
-      if (businessRow != null) {
-        setState(() => _loading = false);
-
-        _showToast(
-          "❌ This is a Business account. Please login from Business Portal.",
-          isError: true,
-        );
-
-        await Future.delayed(const Duration(milliseconds: 700));
-        if (!mounted) return;
-
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const BusinessLoginScreen()),
-        );
-        return;
-      }
-
-      // ✅ Normal traveler login
       final response = await _supabaseService.loginTraveler(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
@@ -479,14 +449,31 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (user != null) {
         if (user.emailConfirmedAt == null) {
-          // Email not verified
           _showToast("Please verify your email before logging in.",
               isError: true);
         } else {
-          // ✅ Verified → go to HomeScreen
+          // ✅ NEW: block business accounts from traveler login
+          final businessAccount = await _supabase
+              .from('business_accounts')
+              .select('id')
+              .eq('id', user.id)
+              .maybeSingle();
+
+          if (businessAccount != null) {
+            await _supabase.auth.signOut();
+            _showToast(
+              "❌ This is a Business Account. Please login from Business Portal.",
+              isError: true,
+            );
+            setState(() => _loading = false);
+            return;
+          }
+
+          // ✅ Verified Traveler → go to HomeScreen
           _showToast("✅ Login successful!", isSuccess: true);
           await Future.delayed(const Duration(seconds: 1));
           if (!mounted) return;
+
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (_) => const HomeScreen()),

@@ -13,6 +13,7 @@ import 'post_likes_screen.dart';
 import 'saved_posts_screen.dart';
 import 'explore_screen.dart';
 import 'business_dashboard_screen.dart';
+import 'business_profile_screen.dart';
 
 import '../services/post_service.dart';
 import '../services/follow_service.dart';
@@ -169,12 +170,24 @@ class _HomeScreenState extends State<HomeScreen> {
   // ---------------- POST CARD ----------------
   Widget _buildPost(Map<String, dynamic> post) {
     final currentUser = _supabase.auth.currentUser;
-    final profile = post['profiles'];
+    final bool isBusinessPost = post['user_type'] == 'agency';
 
-    final String userName = profile?['name'] ?? 'Traveler';
-    final String? avatarUrl = profile?['avatar_url'];
+    // ✅ REQUIRED: correct profile source
+    final profile = isBusinessPost ? post['author'] : post['profiles'];
+
+    // ✅ REQUIRED: name & avatar logic
+    final String userName = isBusinessPost
+        ? (profile?['agency_name'] ?? 'Business')
+        : (profile?['name'] ?? 'Traveler');
+
+    final String? avatarUrl = isBusinessPost
+        ? (profile != null ? profile['logo_url'] : null)
+        : (profile != null ? profile['avatar_url'] : null);
+
+
     final bool isMyPost = post['user_id'] == currentUser?.id;
 
+    // ✅ 🔥 MISSING VARIABLES (THIS IS THE BUG)
     final List mediaList = post['post_media'] ?? [];
     final int activeIndex = _pageIndexes[post['id']] ?? 0;
 
@@ -196,15 +209,22 @@ class _HomeScreenState extends State<HomeScreen> {
             contentPadding: const EdgeInsets.symmetric(horizontal: 12),
             leading: GestureDetector(
               onTap: () {
-                if (!isMyPost) {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          OtherProfileScreen(userId: post['user_id']),
+                if (isMyPost) return;
+
+                final bool isBusinessPost = post['user_type'] == 'business';
+
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => isBusinessPost
+                        ? BusinessProfileScreen(
+                      businessId: post['user_id'],
+                    )
+                        : OtherProfileScreen(
+                      userId: post['user_id'],
                     ),
-                  );
-                }
+                  ),
+                );
               },
               child: CircleAvatar(
                 backgroundImage:
@@ -526,7 +546,13 @@ class _HomeScreenState extends State<HomeScreen> {
         return const InboxScreen();
 
       case 3:
-        return const ProfileScreen();
+        return widget.isBusinessAccount
+            ? BusinessProfileScreen(
+          businessId:
+          _supabase.auth.currentUser!.id,
+          isOwner: true,
+        )
+            : const ProfileScreen();
 
       default:
         return const SizedBox();
@@ -538,6 +564,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         title: const Text("TraveLink"),
         actions: [
           if (_currentIndex == 0)

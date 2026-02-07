@@ -60,7 +60,7 @@ class _FollowListScreenState extends State<FollowListScreen> {
         }
 
         final data = await _supabase
-            .from('profiles')
+            .from('app_users')
             .select('id, name, username, avatar_url')
             .inFilter('id', ids);
 
@@ -92,7 +92,7 @@ class _FollowListScreenState extends State<FollowListScreen> {
         }
 
         final data = await _supabase
-            .from('profiles')
+            .from('app_users')
             .select('id, name, username, avatar_url')
             .inFilter('id', ids);
 
@@ -111,7 +111,8 @@ class _FollowListScreenState extends State<FollowListScreen> {
             .select('follower_id')
             .eq('following_id', widget.userId);
 
-        final targetFollowers = List<Map<String, dynamic>>.from(targetFollowersRows)
+        final targetFollowers =
+        List<Map<String, dynamic>>.from(targetFollowersRows)
             .map((r) => (r['follower_id'] ?? '').toString())
             .where((id) => id.isNotEmpty)
             .toSet();
@@ -139,7 +140,7 @@ class _FollowListScreenState extends State<FollowListScreen> {
         }
 
         final profiles = await _supabase
-            .from('profiles')
+            .from('app_users')
             .select('id, name, username, avatar_url')
             .inFilter('id', mutualIds);
 
@@ -158,7 +159,8 @@ class _FollowListScreenState extends State<FollowListScreen> {
             .select('following_id')
             .eq('follower_id', widget.userId);
 
-        final targetFollowing = List<Map<String, dynamic>>.from(targetFollowingRows)
+        final targetFollowing =
+        List<Map<String, dynamic>>.from(targetFollowingRows)
             .map((r) => (r['following_id'] ?? '').toString())
             .where((id) => id.isNotEmpty)
             .toSet();
@@ -186,7 +188,7 @@ class _FollowListScreenState extends State<FollowListScreen> {
         }
 
         final profiles = await _supabase
-            .from('profiles')
+            .from('app_users')
             .select('id, name, username, avatar_url')
             .inFilter('id', mutualIds);
 
@@ -224,7 +226,8 @@ class _FollowListScreenState extends State<FollowListScreen> {
           final u = _users[i];
 
           final String id = (u['id'] ?? '').toString();
-          final String name = (u['name'] ?? 'Traveler').toString();
+          final String name =
+          (u['name'] ?? 'Traveler').toString();
           final String username = (u['username'] ?? '').toString();
           final String? avatar = u['avatar_url'];
 
@@ -234,7 +237,8 @@ class _FollowListScreenState extends State<FollowListScreen> {
               (avatar != null && avatar.toString().isNotEmpty)
                   ? NetworkImage(avatar)
                   : null,
-              child: (avatar == null || avatar.toString().isEmpty)
+              child:
+              (avatar == null || avatar.toString().isEmpty)
                   ? const Icon(Icons.person)
                   : null,
             ),
@@ -242,12 +246,14 @@ class _FollowListScreenState extends State<FollowListScreen> {
               name,
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
-            subtitle: username.isNotEmpty ? Text("@$username") : null,
+            subtitle:
+            username.isNotEmpty ? Text("@$username") : null,
             onTap: () {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => OtherProfileScreen(userId: id),
+                  builder: (_) =>
+                      OtherProfileScreen(userId: id),
                 ),
               );
             },

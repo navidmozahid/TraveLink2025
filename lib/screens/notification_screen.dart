@@ -50,7 +50,7 @@ class NotificationScreen extends StatelessWidget {
 
               return FutureBuilder<Map<String, dynamic>>(
                 future: supabase
-                    .from('profiles')
+                    .from('app_users')
                     .select()
                     .eq('id', senderId)
                     .single(),

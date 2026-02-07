@@ -21,31 +21,37 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   List<File> _mediaFiles = [];
   bool _posting = false;
 
-  Map<String, dynamic>? _profile;
+  Map<String, dynamic>? _currentUser; // ✅ unified user
+  bool _loadingUser = true;
 
   bool get _canPost => _mediaFiles.isNotEmpty && !_posting;
 
   @override
   void initState() {
     super.initState();
-    _loadProfile();
+    _loadCurrentUser();
   }
 
-  // ---------------- LOAD PROFILE ----------------
-  Future<void> _loadProfile() async {
+  // ---------------- LOAD USER (TRAVELER + BUSINESS) ----------------
+  Future<void> _loadCurrentUser() async {
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return;
 
     final data = await Supabase.instance.client
-        .from('profiles')
-        .select()
+        .from('app_users') // ✅ FIX: unified source
+        .select('id, name, avatar_url, user_type')
         .eq('id', user.id)
         .maybeSingle();
 
-    setState(() => _profile = data);
+    if (!mounted) return;
+
+    setState(() {
+      _currentUser = data;
+      _loadingUser = false;
+    });
   }
 
-  // ---------------- PICK FROM GALLERY (MULTI) ----------------
+  // ---------------- PICK FROM GALLERY ----------------
   Future<void> _pickFromGallery() async {
     final picked = await _picker.pickMultipleMedia();
     if (picked.isEmpty) return;
@@ -55,7 +61,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     });
   }
 
-  // ---------------- PICK FROM CAMERA (SINGLE IMAGE) ----------------
+  // ---------------- PICK FROM CAMERA ----------------
   Future<void> _pickFromCamera() async {
     final picked = await _picker.pickImage(
       source: ImageSource.camera,
@@ -98,8 +104,8 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final name = _profile?['name'] ?? 'User';
-    final avatarUrl = _profile?['avatar_url'];
+    final name = _currentUser?['name'] ?? 'User';
+    final avatarUrl = _currentUser?['avatar_url'];
 
     return Scaffold(
       appBar: AppBar(
@@ -125,24 +131,37 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // USER INFO
+            // ================= USER HEADER =================
             Row(
               children: [
                 CircleAvatar(
+                  radius: 20,
                   backgroundImage:
                   avatarUrl != null ? NetworkImage(avatarUrl) : null,
-                  child:
-                  avatarUrl == null ? const Icon(Icons.person) : null,
+                  child: avatarUrl == null
+                      ? const Icon(Icons.person)
+                      : null,
                 ),
                 const SizedBox(width: 10),
-                Text(name,
-                    style: const TextStyle(fontWeight: FontWeight.bold)),
+                _loadingUser
+                    ? const SizedBox(
+                  width: 120,
+                  height: 14,
+                  child: LinearProgressIndicator(),
+                )
+                    : Text(
+                  name,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ],
             ),
 
             const SizedBox(height: 16),
 
-            // CAPTION
+            // ================= CAPTION =================
             TextField(
               controller: _captionController,
               decoration: const InputDecoration(
@@ -153,7 +172,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
             const SizedBox(height: 16),
 
-            // MEDIA PREVIEW (UPDATED ✅ REMOVE BUTTON)
+            // ================= MEDIA PREVIEW =================
             SizedBox(
               height: 200,
               child: _mediaFiles.isEmpty
@@ -191,7 +210,6 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                           ),
                         ),
 
-                        // ▶ Video icon
                         if (isVideo)
                           const Positioned.fill(
                             child: Center(
@@ -203,7 +221,6 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                             ),
                           ),
 
-                        // ❌ REMOVE BUTTON
                         Positioned(
                           top: 6,
                           right: 6,
@@ -236,7 +253,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
             const SizedBox(height: 16),
 
-            // LOCATION
+            // ================= LOCATION =================
             TextField(
               controller: _locationController,
               decoration: InputDecoration(
@@ -253,7 +270,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
             const SizedBox(height: 16),
 
-            // PICK BUTTONS
+            // ================= PICK BUTTONS =================
             Row(
               children: [
                 ElevatedButton.icon(
