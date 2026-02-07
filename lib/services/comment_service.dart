@@ -19,7 +19,6 @@ class CommentService {
       final userIds =
       comments.map((c) => c['user_id'] as String).toSet().toList();
 
-      // 🔹 MODIFIED: added user_type (nothing removed)
       final users = await supabase
           .from('app_users')
           .select('id, name, avatar_url, user_type')
@@ -29,7 +28,6 @@ class CommentService {
         for (final u in users) u['id']: u,
       };
 
-      // 🔹 ADDED: fetch business accounts for agency comments
       final businesses = await supabase
           .from('business_accounts')
           .select('id, agency_name, logo_url')
@@ -42,14 +40,15 @@ class CommentService {
       return comments.map((c) {
         final u = userMap[c['user_id']];
         final bool isBusiness = u?['user_type'] == 'agency';
+        final business = businessMap[c['user_id']];
 
         return {
           ...c,
 
-          // 🔹 expose user_type for UI
+          // expose user_type
           'user_type': u?['user_type'],
 
-          // 🔹 traveler profile (unchanged behavior)
+          // traveler profile (UNCHANGED)
           'profiles': !isBusiness && u != null
               ? {
             'id': u['id'],
@@ -58,8 +57,14 @@ class CommentService {
           }
               : null,
 
-          // 🔹 business profile for comments
-          'author': isBusiness ? businessMap[c['user_id']] : null,
+          // ✅ FIX: business profile key matches UI
+          'business_accounts': isBusiness && business != null
+              ? {
+            'id': business['id'],
+            'agency_name': business['agency_name'],
+            'avatar_url': business['logo_url'],
+          }
+              : null,
         };
       }).toList();
     });

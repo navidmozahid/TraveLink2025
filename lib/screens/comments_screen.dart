@@ -19,8 +19,6 @@ class _CommentsScreenState extends State<CommentsScreen> {
   String? _replyToName;
   String? _editingCommentId;
 
-  final Set<String> _expandedComments = {};
-
   @override
   Widget build(BuildContext context) {
     final currentUser = Supabase.instance.client.auth.currentUser;
@@ -29,6 +27,7 @@ class _CommentsScreenState extends State<CommentsScreen> {
       appBar: AppBar(title: const Text("Comments")),
       body: Column(
         children: [
+          // ================= COMMENTS =================
           Expanded(
             child: StreamBuilder<List<Map<String, dynamic>>>(
               stream: _commentService.streamComments(widget.postId),
@@ -37,74 +36,38 @@ class _CommentsScreenState extends State<CommentsScreen> {
                   return const Center(child: CircularProgressIndicator());
                 }
 
-                final allComments = snapshot.data!;
-
-                // ✅ FIX: typed parent_id check
-                final parentComments = allComments
-                    .where((c) => (c['parent_id'] as String?) == null)
-                    .toList();
-
-                final Map<String, List<Map<String, dynamic>>> repliesMap = {};
-
-                // ✅ FIX: typed parent_id check
-                for (final c in allComments
-                    .where((c) => (c['parent_id'] as String?) != null)) {
-                  final parentId = c['parent_id'] as String;
-                  repliesMap.putIfAbsent(parentId, () => []).add(c);
-                }
+                final comments = snapshot.data!;
+                final parents =
+                comments.where((c) => c['parent_id'] == null).toList();
+                final replies =
+                comments.where((c) => c['parent_id'] != null).toList();
 
                 return ListView.builder(
-                  itemCount: parentComments.length,
+                  itemCount: parents.length,
                   itemBuilder: (_, index) {
-                    final parent = parentComments[index];
-                    final replies = repliesMap[parent['id']] ?? [];
+                    final c = parents[index];
 
-                    final bool isExpanded =
-                    _expandedComments.contains(parent['id']);
+                    final profile =
+                        c['profiles'] ?? c['business_accounts'];
+
+                    final commentReplies = replies
+                        .where((r) => r['parent_id'] == c['id'])
+                        .toList();
 
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _commentTile(
-                          comment: parent,
-                          isReply: false,
-                          currentUser: currentUser,
+                        _commentTile(c, profile, currentUser),
+                        ...commentReplies.map(
+                              (r) => Padding(
+                            padding: const EdgeInsets.only(left: 48),
+                            child: _commentTile(
+                              r,
+                              r['profiles'] ?? r['business_accounts'],
+                              currentUser,
+                            ),
+                          ),
                         ),
-
-                        if (replies.isNotEmpty)
-                          Padding(
-                            padding:
-                            const EdgeInsets.only(left: 64, bottom: 4),
-                            child: GestureDetector(
-                              onTap: () {
-                                setState(() {
-                                  if (isExpanded) {
-                                    _expandedComments.remove(parent['id']);
-                                  } else {
-                                    _expandedComments.add(parent['id']);
-                                  }
-                                });
-                              },
-                              child: Text(
-                                isExpanded
-                                    ? 'Hide replies'
-                                    : 'View ${replies.length} replies',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey,
-                                ),
-                              ),
-                            ),
-                          ),
-
-                        if (isExpanded)
-                          ...replies.map(
-                                (reply) => _commentTile(
-                              comment: reply,
-                              isReply: true,
-                              currentUser: currentUser,
-                            ),
-                          ),
                       ],
                     );
                   },
@@ -113,23 +76,23 @@ class _CommentsScreenState extends State<CommentsScreen> {
             ),
           ),
 
+          // ================= INPUT =================
           SafeArea(
             child: Column(
               children: [
                 if (_replyToName != null || _editingCommentId != null)
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
                     child: Row(
                       children: [
                         Text(
                           _editingCommentId != null
                               ? "Editing comment"
                               : "Replying to $_replyToName",
-                          style: const TextStyle(fontSize: 13),
                         ),
                         const Spacer(),
                         IconButton(
-                          icon: const Icon(Icons.close, size: 18),
+                          icon: const Icon(Icons.close),
                           onPressed: () {
                             setState(() {
                               _replyToCommentId = null;
@@ -143,7 +106,7 @@ class _CommentsScreenState extends State<CommentsScreen> {
                     ),
                   ),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
+                  padding: const EdgeInsets.all(8),
                   child: Row(
                     children: [
                       Expanded(
@@ -151,7 +114,6 @@ class _CommentsScreenState extends State<CommentsScreen> {
                           controller: _controller,
                           decoration: const InputDecoration(
                             hintText: "Add a comment...",
-                            border: InputBorder.none,
                           ),
                         ),
                       ),
@@ -192,176 +154,123 @@ class _CommentsScreenState extends State<CommentsScreen> {
     );
   }
 
-  Widget _commentTile({
-    required Map<String, dynamic> comment,
-    required bool isReply,
-    required User? currentUser,
-  }) {
-    // ✅ FIX: typed user_type
-    final String? userType = comment['user_type'] as String?;
-    final bool isBusiness = userType == 'agency';
-
-    // ✅ FIX: typed profile sources
-    final Map<String, dynamic>? profile = isBusiness
-        ? comment['author'] as Map<String, dynamic>?
-        : comment['profiles'] as Map<String, dynamic>?;
-
-    final bool isMyComment = comment['user_id'] == currentUser?.id;
-
-    final String? avatarUrl = isBusiness
-        ? profile?['logo_url']
-        : profile?['avatar_url'];
+  // ================= COMMENT TILE =================
+  Widget _commentTile(
+      Map<String, dynamic> c,
+      Map<String, dynamic>? profile,
+      User? currentUser,
+      ) {
+    final isMyComment = c['user_id'] == currentUser?.id;
 
     void openProfile() {
       if (!isMyComment) {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => OtherProfileScreen(userId: comment['user_id']),
+            builder: (_) => OtherProfileScreen(
+              userId: c['user_id'],
+            ),
           ),
         );
       }
     }
 
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        isReply ? 48 : 8,
-        6,
-        8,
-        6,
+    final avatarUrl = profile?['avatar_url'];
+    final displayName =
+        profile?['name'] ?? profile?['agency_name'] ?? 'User';
+
+    return ListTile(
+      leading: InkWell(
+        onTap: openProfile,
+        child: CircleAvatar(
+          backgroundImage:
+          avatarUrl != null ? NetworkImage(avatarUrl) : null,
+          child: avatarUrl == null
+              ? const Icon(Icons.person)
+              : null,
+        ),
       ),
-      child: Row(
+      title: InkWell(
+        onTap: openProfile,
+        child: Text(
+          displayName,
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+      ),
+      subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          InkWell(
-            onTap: openProfile,
-            child: CircleAvatar(
-              radius: isReply ? 14 : 18,
-              backgroundImage:
-              avatarUrl != null ? NetworkImage(avatarUrl) : null,
-              child: avatarUrl == null
-                  ? const Icon(Icons.person, size: 16)
-                  : null,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                RichText(
-                  text: TextSpan(
-                    style: const TextStyle(color: Colors.black),
+          Text(c['content']),
+          Row(
+            children: [
+              // ❤️ COMMENT LIKE
+              StreamBuilder<List<Map<String, dynamic>>>(
+                stream: _commentService.streamCommentLikes(c['id']),
+                builder: (_, snap) {
+                  final likes = snap.data ?? [];
+                  final isLiked =
+                  likes.any((l) => l['user_id'] == currentUser?.id);
+
+                  return Row(
                     children: [
-                      TextSpan(
-                        text: isBusiness
-                            ? (profile?['agency_name'] ?? 'Business')
-                            : (profile?['name'] ?? 'User'),
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      const TextSpan(text: '  '),
-                      TextSpan(text: comment['content']),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    StreamBuilder<List<Map<String, dynamic>>>(
-                      stream:
-                      _commentService.streamCommentLikes(comment['id']),
-                      builder: (_, snap) {
-                        final likes = snap.data ?? [];
-                        final isLiked = likes.any(
-                              (l) => l['user_id'] == currentUser?.id,
-                        );
-
-                        return Row(
-                          children: [
-                            GestureDetector(
-                              onTap: () {
-                                isLiked
-                                    ? _commentService
-                                    .unlikeComment(comment['id'])
-                                    : _commentService
-                                    .likeComment(comment['id']);
-                              },
-                              child: Icon(
-                                isLiked
-                                    ? Icons.favorite
-                                    : Icons.favorite_border,
-                                size: 16,
-                                color:
-                                isLiked ? Colors.red : Colors.grey,
-                              ),
-                            ),
-                            if (likes.isNotEmpty)
-                              Padding(
-                                padding:
-                                const EdgeInsets.only(left: 4),
-                                child: Text(
-                                  likes.length.toString(),
-                                  style:
-                                  const TextStyle(fontSize: 12),
-                                ),
-                              ),
-                          ],
-                        );
-                      },
-                    ),
-
-                    const SizedBox(width: 12),
-
-                    GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _replyToCommentId = comment['id'];
-                          _replyToName = isBusiness
-                              ? profile?['agency_name']
-                              : profile?['name'];
-                          _editingCommentId = null;
-                          _controller.clear();
-                        });
-                      },
-                      child: const Text(
-                        "Reply",
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey,
+                      IconButton(
+                        icon: Icon(
+                          isLiked
+                              ? Icons.favorite
+                              : Icons.favorite_border,
+                          size: 18,
+                          color:
+                          isLiked ? Colors.red : Colors.grey,
                         ),
-                      ),
-                    ),
-
-                    if (isMyComment)
-                      PopupMenuButton<String>(
-                        onSelected: (value) {
-                          if (value == 'edit') {
-                            setState(() {
-                              _editingCommentId = comment['id'];
-                              _controller.text = comment['content'];
-                              _replyToCommentId = null;
-                              _replyToName = null;
-                            });
-                          } else if (value == 'delete') {
-                            _commentService
-                                .deleteComment(comment['id']);
-                          }
+                        onPressed: () {
+                          isLiked
+                              ? _commentService.unlikeComment(c['id'])
+                              : _commentService.likeComment(c['id']);
                         },
-                        itemBuilder: (_) => const [
-                          PopupMenuItem(
-                            value: 'edit',
-                            child: Text("Edit"),
-                          ),
-                          PopupMenuItem(
-                            value: 'delete',
-                            child: Text("Delete"),
-                          ),
-                        ],
                       ),
+                      if (likes.isNotEmpty)
+                        Text(likes.length.toString()),
+                    ],
+                  );
+                },
+              ),
+
+              // 💬 REPLY
+              TextButton(
+                onPressed: () {
+                  setState(() {
+                    _replyToCommentId = c['id'];
+                    _replyToName = displayName;
+                    _editingCommentId = null;
+                    _controller.clear();
+                  });
+                },
+                child: const Text("Reply"),
+              ),
+
+              // ✏️ EDIT / 🗑 DELETE
+              if (isMyComment)
+                PopupMenuButton<String>(
+                  onSelected: (value) {
+                    if (value == 'edit') {
+                      setState(() {
+                        _editingCommentId = c['id'];
+                        _controller.text = c['content'];
+                        _replyToCommentId = null;
+                        _replyToName = null;
+                      });
+                    } else if (value == 'delete') {
+                      _commentService.deleteComment(c['id']);
+                    }
+                  },
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(
+                        value: 'edit', child: Text("Edit")),
+                    PopupMenuItem(
+                        value: 'delete', child: Text("Delete")),
                   ],
-                )
-              ],
-            ),
+                ),
+            ],
           ),
         ],
       ),
