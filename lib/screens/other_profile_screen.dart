@@ -6,7 +6,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/follow_service.dart';
 import '../services/message_service.dart';
 import 'chat_screen.dart';
-import 'message_screen.dart';
 import 'post_detail_screen.dart';
 import 'follow_list_screen.dart';
 
@@ -35,7 +34,7 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
 
   bool get isMyProfile => widget.userId == _supabase.auth.currentUser?.id;
 
-  // ✅ NEW: Instagram style avatar preview popup (blur background)
+  // ================= AVATAR PREVIEW (BLUR) =================
   void _showAvatarPreview(String avatarUrl) {
     showGeneralDialog(
       context: context,
@@ -49,7 +48,6 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
             color: Colors.transparent,
             child: Stack(
               children: [
-                // ✅ BLUR BACKGROUND
                 Positioned.fill(
                   child: BackdropFilter(
                     filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
@@ -58,36 +56,29 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
                     ),
                   ),
                 ),
-
-                // ✅ AVATAR PREVIEW
                 Center(
-                  child: GestureDetector(
-                    onTap: () {},
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(18),
-                      child: Image.network(
-                        avatarUrl,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(18),
+                    child: Image.network(
+                      avatarUrl,
+                      width: 300,
+                      height: 300,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
                         width: 300,
                         height: 300,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(
-                          width: 300,
-                          height: 300,
-                          color: Color(0xFF475569),
-                          child: const Icon(Icons.broken_image, size: 40),
-                        ),
+                        color: const Color(0xFF475569),
+                        child: const Icon(Icons.broken_image, size: 40),
                       ),
                     ),
                   ),
                 ),
-
-                // ✅ CLOSE BUTTON
                 Positioned(
                   top: 40,
                   right: 18,
                   child: IconButton(
-                    icon:
-                    const Icon(Icons.close, color: Colors.white, size: 28),
+                    icon: const Icon(Icons.close,
+                        color: Colors.white, size: 28),
                     onPressed: () => Navigator.pop(context),
                   ),
                 ),
@@ -109,13 +100,13 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
     await Future.wait([
       _loadProfile(),
       _loadPosts(),
-      _loadFollowCounts(),
       _checkFollowing(),
     ]);
 
     if (mounted) setState(() => _loading = false);
   }
 
+  // ================= LOAD PROFILE =================
   Future<void> _loadProfile() async {
     _profile = await _supabase
         .from('profiles')
@@ -124,6 +115,7 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
         .maybeSingle();
   }
 
+  // ================= LOAD POSTS =================
   Future<void> _loadPosts() async {
     final data = await _supabase
         .from('posts')
@@ -134,6 +126,7 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
     _posts = List<Map<String, dynamic>>.from(data);
   }
 
+  // ================= FOLLOW COUNTS =================
   Future<void> _loadFollowCounts() async {
     _followers = await _followService.countFollowers(widget.userId);
     _following = await _followService.countFollowing(widget.userId);
@@ -142,6 +135,24 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
   Future<void> _checkFollowing() async {
     _isFollowing = await _followService.isFollowing(widget.userId);
   }
+
+// ✅ ADD THESE RIGHT BELOW
+  Stream<int> _followersCount() {
+    return _supabase
+        .from('follows')
+        .stream(primaryKey: ['id'])
+        .map((rows) =>
+    rows.where((r) => r['following_id'] == widget.userId).length);
+  }
+
+  Stream<int> _followingCount() {
+    return _supabase
+        .from('follows')
+        .stream(primaryKey: ['id'])
+        .map((rows) =>
+    rows.where((r) => r['follower_id'] == widget.userId).length);
+  }
+
 
   Future<void> _toggleFollow() async {
     if (_followLoading) return;
@@ -169,8 +180,13 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
     }
 
     final String name = _profile?['name'] ?? 'Traveler';
+    final String username = _profile?['username'] ?? '';
     final String bio = _profile?['bio'] ?? '';
     final String? avatar = _profile?['avatar_url'];
+    final String city = _profile?['city'] ?? '';
+    final String country = _profile?['country'] ?? '';
+    final String website = _profile?['website_url'] ?? '';
+    final List interests = (_profile?['interests'] as List?) ?? [];
 
     return Scaffold(
       appBar: AppBar(title: Text(name)),
@@ -179,11 +195,12 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // ================= HEADER =================
             Row(
               children: [
                 GestureDetector(
                   onTap: () {
-                    if (avatar != null && avatar.toString().isNotEmpty) {
+                    if (avatar != null && avatar.isNotEmpty) {
                       _showAvatarPreview(avatar);
                     }
                   },
@@ -205,8 +222,6 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
                         title: 'Posts',
                         value: _posts.length.toString(),
                       ),
-
-                      // ✅ FOLLOWERS (CLICKABLE → MUTUAL FOLLOWERS)
                       GestureDetector(
                         onTap: () {
                           Navigator.push(
@@ -215,18 +230,22 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
                               builder: (_) => FollowListScreen(
                                 userId: widget.userId,
                                 showFollowers: true,
-                                mutualOnly: true,
+                                mutualOnly: false,
                               ),
                             ),
                           );
                         },
-                        child: _StatItem(
-                          title: 'Followers',
-                          value: _followers.toString(),
+                        child: StreamBuilder<int>(
+                          stream: _followersCount(),
+                          builder: (_, snap) {
+                            return _StatItem(
+                              title: 'Followers',
+                              value: (snap.data ?? 0).toString(),
+                            );
+                          },
                         ),
-                      ),
 
-                      // ✅ FOLLOWING (CLICKABLE → MUTUAL FOLLOWING)
+                      ),
                       GestureDetector(
                         onTap: () {
                           Navigator.push(
@@ -235,15 +254,21 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
                               builder: (_) => FollowListScreen(
                                 userId: widget.userId,
                                 showFollowers: false,
-                                mutualOnly: true,
+                                mutualOnly: false,
                               ),
                             ),
                           );
                         },
-                        child: _StatItem(
-                          title: 'Following',
-                          value: _following.toString(),
+                        child: StreamBuilder<int>(
+                          stream: _followingCount(),
+                          builder: (_, snap) {
+                            return _StatItem(
+                              title: 'Following',
+                              value: (snap.data ?? 0).toString(),
+                            );
+                          },
                         ),
+
                       ),
                     ],
                   ),
@@ -253,55 +278,133 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
 
             const SizedBox(height: 12),
 
+            // ================= INFO =================
             Text(
               name,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
+              style:
+              const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
 
-            if (bio.isNotEmpty) Text(bio),
+            if (username.isNotEmpty)
+              Text('@$username',
+                  style: const TextStyle(color: Colors.grey)),
+
+            if (bio.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(bio),
+              ),
+
+            if (city.isNotEmpty || country.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Row(
+                  children: [
+                    const Icon(Icons.location_on,
+                        size: 16, color: Colors.grey),
+                    const SizedBox(width: 4),
+                    Text(
+                      [country, city]
+                          .where((e) => e.isNotEmpty)
+                          .join(', '),
+                      style: const TextStyle(color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+
+            if (website.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  website,
+                  style: const TextStyle(color: Colors.blue),
+                ),
+              ),
+
+            if (interests.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: interests.map<Widget>((tag) {
+                    return Chip(
+                      label: Text(tag.toString()),
+                      backgroundColor: const Color(0xFF475569),
+                      labelStyle:
+                      const TextStyle(color: Colors.white),
+                    );
+                  }).toList(),
+                ),
+              ),
 
             const SizedBox(height: 12),
 
+            // ================= ACTIONS =================
             if (!isMyProfile)
               Row(
                 children: [
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: _followLoading ? null : _toggleFollow,
-                      child: Text(_isFollowing ? 'Following' : 'Follow'),
+                      onPressed:
+                      _followLoading ? null : _toggleFollow,
+                      child:
+                      Text(_isFollowing ? 'Following' : 'Follow'),
                     ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: OutlinedButton(
                       onPressed: () async {
-                        // ✅ ONLY NEW CODE (Messaging) - Everything else unchanged
-                        final messageService = MessageService();
+                        try {
+                          final messageService = MessageService();
 
-                        final conversationId = await messageService
-                            .getOrCreateConversation(widget.userId);
+                          debugPrint("➡️ Message pressed");
+                          debugPrint(
+                              "➡️ Me: ${_supabase.auth.currentUser?.id}");
+                          debugPrint("➡️ Other: ${widget.userId}");
 
-                        if (!context.mounted) return;
+                          final conversationId =
+                          await messageService.getOrCreateConversation(
+                              widget.userId);
 
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => ChatScreen(
-                              conversationId: conversationId,
-                              otherUser: {
-                                "id": widget.userId,
-                                "username": _profile?['username'] ?? name,
-                                "avatar_url": _profile?['avatar_url'],
-                              },
+                          debugPrint(
+                              "✅ Conversation ID: $conversationId");
+
+                          if (!context.mounted) return;
+
+                          final Map<String, dynamic> otherUser = {
+                            'id': widget.userId,
+                            'name': name,
+                            'username':
+                            username.isNotEmpty ? username : null,
+                            'avatar_url': avatar,
+                          };
+
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ChatScreen(
+                                conversationId: conversationId,
+                                otherUser: otherUser,
+                              ),
                             ),
-                          ),
-                        );
+                          );
+                        } catch (e, s) {
+                          debugPrint("❌ MESSAGE ERROR: $e");
+                          debugPrint("❌ STACK: $s");
 
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content:
+                              Text("Message failed: $e"),
+                            ),
+                          );
+                        }
                       },
-                      child: const Text("Message"),
+                      child: const Text('Message'),
                     ),
                   ),
                 ],
@@ -310,12 +413,13 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
             const SizedBox(height: 20),
             const Divider(),
 
-            // ---------- POSTS GRID (FIXED) ----------
+            // ================= POSTS GRID =================
             _posts.isEmpty
                 ? const Center(child: Text('No posts'))
                 : GridView.builder(
               shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
+              physics:
+              const NeverScrollableScrollPhysics(),
               itemCount: _posts.length,
               gridDelegate:
               const SliverGridDelegateWithFixedCrossAxisCount(
@@ -336,15 +440,18 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
                 String? previewUrl;
                 bool isVideo = false;
 
-                if (media.isNotEmpty && media.first['media_url'] != null) {
+                if (media.isNotEmpty &&
+                    media.first['media_url'] != null) {
                   previewUrl = media.first['media_url'];
-                  isVideo = media.first['media_type'] == 'video';
+                  isVideo =
+                      media.first['media_type'] == 'video';
                 } else if (post['media_url'] != null) {
                   previewUrl = post['media_url'];
                 }
 
                 if (previewUrl == null) {
-                  return Container(color: Color(0xFF475569));
+                  return Container(
+                      color: const Color(0xFF475569));
                 }
 
                 return GestureDetector(
@@ -353,27 +460,26 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
                       context,
                       MaterialPageRoute(
                         builder: (_) =>
-                            PostDetailScreen(postId: post['id']),
+                            PostDetailScreen(
+                                postId: post['id']),
                       ),
                     );
                   },
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
-                      // ✅ ONLY load images
                       if (!isVideo)
                         Image.network(
                           previewUrl,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(
-                            color: Color(0xFF475569),
+                          errorBuilder:
+                              (_, __, ___) => Container(
+                            color:
+                            const Color(0xFF475569),
                           ),
                         )
                       else
-                        Container(
-                          color: Colors.black12,
-                        ),
-
+                        Container(color: Colors.black12),
                       if (isVideo)
                         const Center(
                           child: Icon(
@@ -410,9 +516,7 @@ class _StatItem extends StatelessWidget {
         Text(
           value,
           style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-          ),
+              fontWeight: FontWeight.bold, fontSize: 16),
         ),
         Text(
           title,

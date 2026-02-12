@@ -16,6 +16,15 @@ class CommentService {
         .asyncMap((comments) async {
       if (comments.isEmpty) return [];
 
+      // ✅ ADDED: fetch post owner once (REQUIRED FOR UI DELETE)
+      final post = await supabase
+          .from('posts')
+          .select('user_id')
+          .eq('id', postId)
+          .maybeSingle();
+
+      final postOwnerId = post?['user_id'];
+
       final userIds =
       comments.map((c) => c['user_id'] as String).toSet().toList();
 
@@ -45,6 +54,9 @@ class CommentService {
         return {
           ...c,
 
+          // ✅ ADDED: expose post owner for UI permission check
+          'post_owner_id': postOwnerId,
+
           // expose user_type
           'user_type': u?['user_type'],
 
@@ -57,7 +69,7 @@ class CommentService {
           }
               : null,
 
-          // ✅ FIX: business profile key matches UI
+          // business profile (for business comments)
           'business_accounts': isBusiness && business != null
               ? {
             'id': business['id'],

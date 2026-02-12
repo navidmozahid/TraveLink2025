@@ -61,7 +61,7 @@ class _FollowListScreenState extends State<FollowListScreen> {
 
         final data = await _supabase
             .from('app_users')
-            .select('id, name, username, avatar_url')
+            .select('id, name, avatar_url, user_type')
             .inFilter('id', ids);
 
         setState(() {
@@ -93,7 +93,8 @@ class _FollowListScreenState extends State<FollowListScreen> {
 
         final data = await _supabase
             .from('app_users')
-            .select('id, name, username, avatar_url')
+            .select('id, name, avatar_url, user_type')
+
             .inFilter('id', ids);
 
         setState(() {
@@ -141,7 +142,7 @@ class _FollowListScreenState extends State<FollowListScreen> {
 
         final profiles = await _supabase
             .from('app_users')
-            .select('id, name, username, avatar_url')
+            .select('id, name, avatar_url, user_type')
             .inFilter('id', mutualIds);
 
         setState(() {
@@ -189,7 +190,7 @@ class _FollowListScreenState extends State<FollowListScreen> {
 
         final profiles = await _supabase
             .from('app_users')
-            .select('id, name, username, avatar_url')
+            .select('id, name, avatar_url, user_type')
             .inFilter('id', mutualIds);
 
         setState(() {
@@ -246,8 +247,15 @@ class _FollowListScreenState extends State<FollowListScreen> {
               name,
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
-            subtitle:
-            username.isNotEmpty ? Text("@$username") : null,
+            subtitle: username.isNotEmpty
+                ? Text("@$username")
+                : Text(
+              u['user_type'] == 'business'
+                  ? "Business Account"
+                  : "",
+              style: const TextStyle(color: Color(0xFF475569)),
+            ),
+
             onTap: () {
               Navigator.push(
                 context,

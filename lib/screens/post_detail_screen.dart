@@ -48,12 +48,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
   // ---------------- LOAD POST ----------------
   Future<void> _loadPost() async {
-    // ✅ FIX: force loading UI for refresh after edit
-    if (mounted) {
-      setState(() => _loading = true);
-    }
+    if (mounted) setState(() => _loading = true);
 
-    // ✅ FIX: clear old media state
     _media = [];
     _currentIndex = 0;
 
@@ -68,11 +64,36 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       return;
     }
 
-    final profile = await _supabase
+    // 🔹 user type from app_users (SOURCE OF TRUTH)
+    final appUser = await _supabase
+        .from('app_users')
+        .select('user_type')
+        .eq('id', post['user_id'])
+        .limit(1)
+        .single();
+
+
+    // ✅ FIX: force type safety
+    final bool isBusiness =
+        (appUser?['user_type'] as String?) == 'agency';
+
+    // 🔹 traveler profile
+    final Map<String, dynamic>? travelerProfile = !isBusiness
+        ? await _supabase
         .from('profiles')
         .select()
         .eq('id', post['user_id'])
-        .maybeSingle();
+        .maybeSingle()
+        : null;
+
+    // 🔹 business profile
+    final Map<String, dynamic>? businessProfile = isBusiness
+        ? await _supabase
+        .from('business_accounts')
+        .select('id, agency_name, logo_url')
+        .eq('id', post['user_id'])
+        .maybeSingle()
+        : null;
 
     final media = await _supabase
         .from('post_media')
@@ -112,7 +133,16 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     setState(() {
       _post = {
         ...post,
-        'profiles': profile,
+        'profiles': travelerProfile,
+        'business_accounts': businessProfile == null
+            ? null
+            : {
+          'id': businessProfile['id'],
+          'agency_name': businessProfile['agency_name'],
+          'avatar_url': businessProfile['logo_url'], // ✅ normalize
+        },
+
+        'user_type': appUser?['user_type'],
       };
       _loading = false;
     });
@@ -145,9 +175,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
     await _supabase.from('posts').delete().eq('id', widget.postId);
 
-    if (mounted) {
-      Navigator.pop(context, true);
-    }
+    if (mounted) Navigator.pop(context, true);
   }
 
   void _toggleMute() {
@@ -173,10 +201,22 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       );
     }
 
-    final profile = _post!['profiles'];
     final currentUser = _supabase.auth.currentUser;
-    final isOwner =
+    final bool isOwner =
         currentUser != null && _post!['user_id'] == currentUser.id;
+
+    final bool isBusiness =
+        (_post!['user_type'] as String?) == 'agency';
+
+    final Map<String, dynamic>? profile =
+    isBusiness ? _post!['business_accounts'] : _post!['profiles'];
+
+    final String displayName =
+        profile?['name'] ?? profile?['agency_name'] ?? 'User';
+
+    final String? avatarUrl = profile?['avatar_url'];
+
+
 
     return Scaffold(
       appBar: AppBar(
@@ -191,8 +231,10 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                     MaterialPageRoute(
                       builder: (_) => EditPostScreen(
                         postId: widget.postId,
-                        initialCaption: _post!['caption']?.toString() ?? '',
-                        initialLocation: _post!['location']?.toString() ?? '',
+                        initialCaption:
+                        _post!['caption']?.toString() ?? '',
+                        initialLocation:
+                        _post!['location']?.toString() ?? '',
                       ),
                     ),
                   );
@@ -207,16 +249,11 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                 }
               },
               itemBuilder: (_) => const [
-                PopupMenuItem(
-                  value: 'edit',
-                  child: Text("Edit"),
-                ),
+                PopupMenuItem(value: 'edit', child: Text("Edit")),
                 PopupMenuItem(
                   value: 'delete',
-                  child: Text(
-                    "Delete",
-                    style: TextStyle(color: Colors.red),
-                  ),
+                  child:
+                  Text("Delete", style: TextStyle(color: Colors.red)),
                 ),
               ],
             ),
@@ -239,16 +276,14 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                 }
               },
               child: CircleAvatar(
-                backgroundImage: profile?['avatar_url'] != null
-                    ? NetworkImage(profile['avatar_url'])
-                    : null,
-                child: profile?['avatar_url'] == null
-                    ? const Icon(Icons.person)
-                    : null,
+                backgroundImage:
+                avatarUrl != null ? NetworkImage(avatarUrl) : null,
+                child:
+                avatarUrl == null ? const Icon(Icons.person) : null,
               ),
             ),
             title: Text(
-              profile?['name'] ?? 'Traveler',
+              displayName,
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             subtitle: Text(_post!['location'] ?? ''),
@@ -261,12 +296,14 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               children: [
                 PageView.builder(
                   itemCount: _media.length,
-                  onPageChanged: (i) => setState(() => _currentIndex = i),
+                  onPageChanged: (i) =>
+                      setState(() => _currentIndex = i),
                   itemBuilder: (_, i) {
                     final item = _media[i];
                     if (item['media_type'] == 'video') {
                       final controller = _videoControllers[i];
-                      if (controller == null || !controller.value.isInitialized) {
+                      if (controller == null ||
+                          !controller.value.isInitialized) {
                         return Container(color: Colors.black);
                       }
                       return VideoPlayer(controller);
@@ -284,7 +321,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                     bottom: 12,
                     child: IconButton(
                       icon: Icon(
-                        _isMuted ? Icons.volume_off : Icons.volume_up,
+                        _isMuted
+                            ? Icons.volume_off
+                            : Icons.volume_up,
                         color: Colors.white,
                       ),
                       onPressed: _toggleMute,
@@ -301,13 +340,15 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                       children: List.generate(
                         _media.length,
                             (i) => Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 3),
+                          margin:
+                          const EdgeInsets.symmetric(horizontal: 3),
                           width: _currentIndex == i ? 8 : 6,
                           height: _currentIndex == i ? 8 : 6,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color:
-                            _currentIndex == i ? Colors.white : Colors.white54,
+                            color: _currentIndex == i
+                                ? Colors.white
+                                : Colors.white54,
                           ),
                         ),
                       ),
@@ -327,21 +368,25 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                     .eq('post_id', widget.postId),
                 builder: (_, snap) {
                   final likes = snap.data ?? [];
-                  final isLiked = likes.any(
-                        (l) => l['user_id'] == currentUser?.id,
-                  );
+                  final isLiked =
+                  likes.any((l) => l['user_id'] == currentUser?.id);
 
                   return Row(
                     children: [
                       IconButton(
                         icon: Icon(
-                          isLiked ? Icons.favorite : Icons.favorite_border,
-                          color: isLiked ? Colors.red : Colors.black,
+                          isLiked
+                              ? Icons.favorite
+                              : Icons.favorite_border,
+                          color:
+                          isLiked ? Colors.red : Colors.black,
                         ),
                         onPressed: () {
                           isLiked
-                              ? _likeService.unlikePost(widget.postId)
-                              : _likeService.likePost(widget.postId);
+                              ? _likeService
+                              .unlikePost(widget.postId)
+                              : _likeService
+                              .likePost(widget.postId);
                         },
                       ),
                       if (likes.isNotEmpty)
@@ -350,8 +395,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) =>
-                                    PostLikesScreen(postId: widget.postId),
+                                builder: (_) => PostLikesScreen(
+                                    postId: widget.postId),
                               ),
                             );
                           },
@@ -367,7 +412,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => CommentsScreen(postId: widget.postId),
+                      builder: (_) =>
+                          CommentsScreen(postId: widget.postId),
                     ),
                   );
                 },
@@ -383,8 +429,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                 style: const TextStyle(color: Colors.black),
                 children: [
                   TextSpan(
-                    text: '${profile?['name'] ?? 'Traveler'} ',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+                    text: '$displayName ',
+                    style:
+                    const TextStyle(fontWeight: FontWeight.bold),
                   ),
                   TextSpan(text: _post!['caption'] ?? ''),
                 ],
@@ -394,16 +441,19 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
           // ---------- COMMENT COUNT ----------
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            padding: const EdgeInsets.symmetric(
+                horizontal: 12, vertical: 8),
             child: FutureBuilder<int>(
-              future: _commentService.countComments(widget.postId),
+              future:
+              _commentService.countComments(widget.postId),
               builder: (_, snap) {
                 if (!snap.hasData || snap.data == 0) {
                   return const SizedBox();
                 }
                 return Text(
                   "View ${snap.data} comments",
-                  style: const TextStyle(color: Colors.grey),
+                  style:
+                  const TextStyle(color: Colors.grey),
                 );
               },
             ),

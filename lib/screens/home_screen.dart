@@ -211,7 +211,7 @@ class _HomeScreenState extends State<HomeScreen> {
               onTap: () {
                 if (isMyPost) return;
 
-                final bool isBusinessPost = post['user_type'] == 'business';
+                final bool isBusinessPost = post['user_type'] == 'agency';
 
                 Navigator.push(
                   context,

@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../services/supabase_agency_service.dart';
 
 class EditBusinessProfileScreen extends StatefulWidget {
@@ -17,6 +19,7 @@ class EditBusinessProfileScreen extends StatefulWidget {
 class _EditBusinessProfileScreenState
     extends State<EditBusinessProfileScreen> {
   final SupabaseAgencyService _service = SupabaseAgencyService();
+  final ImagePicker _picker = ImagePicker();
 
   late TextEditingController _description;
   late TextEditingController _city;
@@ -26,10 +29,15 @@ class _EditBusinessProfileScreenState
   late TextEditingController _address;
 
   bool _saving = false;
+  bool _uploadingImage = false;
+
+  String? _logoUrl;
 
   @override
   void initState() {
     super.initState();
+    _logoUrl = widget.business['logo_url'];
+
     _description =
         TextEditingController(text: widget.business['description'] ?? '');
     _city = TextEditingController(text: widget.business['city'] ?? '');
@@ -37,6 +45,29 @@ class _EditBusinessProfileScreenState
     _phone = TextEditingController(text: widget.business['phone'] ?? '');
     _email = TextEditingController(text: widget.business['email'] ?? '');
     _address = TextEditingController(text: widget.business['address'] ?? '');
+  }
+
+  // ---------------- PROFILE IMAGE PICK ----------------
+  Future<void> _pickAndUploadLogo() async {
+    final file = await _picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 80,
+    );
+    if (file == null) return;
+
+    setState(() => _uploadingImage = true);
+
+    await _service.uploadBusinessLogo(File(file.path));
+
+    final updated =
+    await _service.getBusinessProfileById(widget.business['id']);
+
+    if (!mounted) return;
+
+    setState(() {
+      _logoUrl = updated?['logo_url'];
+      _uploadingImage = false;
+    });
   }
 
   Future<void> _save() async {
@@ -90,6 +121,55 @@ class _EditBusinessProfileScreenState
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
+            // ================= PROFILE IMAGE =================
+            Center(
+              child: Stack(
+                children: [
+                  CircleAvatar(
+                    radius: 48,
+                    backgroundImage:
+                    _logoUrl != null && _logoUrl!.isNotEmpty
+                        ? NetworkImage(_logoUrl!)
+                        : null,
+                    child: _logoUrl == null
+                        ? const Icon(Icons.business, size: 36)
+                        : null,
+                  ),
+
+                  Positioned(
+                    bottom: 0,
+                    right: 0,
+                    child: GestureDetector(
+                      onTap: _uploadingImage ? null : _pickAndUploadLogo,
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: const BoxDecoration(
+                          color: Colors.black,
+                          shape: BoxShape.circle,
+                        ),
+                        child: _uploadingImage
+                            ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                            : const Icon(
+                          Icons.edit,
+                          size: 16,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
             _field("Description", _description, maxLines: 3),
             _field("City", _city),
             _field("Country", _country),

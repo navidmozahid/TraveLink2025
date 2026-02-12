@@ -47,6 +47,7 @@ class _CommentsScreenState extends State<CommentsScreen> {
                   itemBuilder: (_, index) {
                     final c = parents[index];
 
+                    // traveler OR business profile
                     final profile =
                         c['profiles'] ?? c['business_accounts'];
 
@@ -161,6 +162,7 @@ class _CommentsScreenState extends State<CommentsScreen> {
       User? currentUser,
       ) {
     final isMyComment = c['user_id'] == currentUser?.id;
+    final isPostOwner = c['post_owner_id'] == currentUser?.id;
 
     void openProfile() {
       if (!isMyComment) {
@@ -249,10 +251,10 @@ class _CommentsScreenState extends State<CommentsScreen> {
               ),
 
               // ✏️ EDIT / 🗑 DELETE
-              if (isMyComment)
+              if (isMyComment || isPostOwner)
                 PopupMenuButton<String>(
                   onSelected: (value) {
-                    if (value == 'edit') {
+                    if (value == 'edit' && isMyComment) {
                       setState(() {
                         _editingCommentId = c['id'];
                         _controller.text = c['content'];
@@ -263,10 +265,11 @@ class _CommentsScreenState extends State<CommentsScreen> {
                       _commentService.deleteComment(c['id']);
                     }
                   },
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(
-                        value: 'edit', child: Text("Edit")),
-                    PopupMenuItem(
+                  itemBuilder: (_) => [
+                    if (isMyComment)
+                      const PopupMenuItem(
+                          value: 'edit', child: Text("Edit")),
+                    const PopupMenuItem(
                         value: 'delete', child: Text("Delete")),
                   ],
                 ),
