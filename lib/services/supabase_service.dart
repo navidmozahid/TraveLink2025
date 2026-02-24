@@ -37,15 +37,6 @@ class SupabaseService {
       throw Exception('Signup failed: user is null');
     }
 
-    await client.from('profiles').upsert({
-      'id': user.id,
-      'email': email,
-      'name': name,
-      'country': country,
-      'phone': phone,
-      'bio': '',
-      'avatar_url': null,
-    });
   }
 
   /// LOGIN
