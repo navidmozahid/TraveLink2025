@@ -51,17 +51,24 @@ class LikeService {
     return response.length;
   }
 
-  // 👥 WHO LIKED (NEW)
+  // 👥 WHO LIKED (FIXED FOR BUSINESS + TRAVELER)
   Future<List<Map<String, dynamic>>> fetchLikes(String postId) async {
     final response = await supabase
         .from('likes')
         .select('''
-          user_id,
-          profiles (
-            name,
-            avatar_url
-          )
-        ''')
+        user_id,
+        app_users (
+          user_type
+        ),
+        profiles (
+          name,
+          avatar_url
+        ),
+        business_accounts (
+          agency_name,
+          logo_url
+        )
+      ''')
         .eq('post_id', postId);
 
     return List<Map<String, dynamic>>.from(response);

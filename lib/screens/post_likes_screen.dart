@@ -60,7 +60,19 @@ class _PostLikesScreenState extends State<PostLikesScreen> {
         return;
       }
 
-      // ✅ 3) Load profiles for those userIds
+      // ✅ 3) Load user_type
+      final usersData = await _supabase
+          .from('app_users')
+          .select('id, user_type')
+          .inFilter('id', userIds);
+
+      final users = List<Map<String, dynamic>>.from(usersData);
+
+      final Map<String, Map<String, dynamic>> userMap = {
+        for (final u in users) (u['id'] ?? '').toString(): u,
+      };
+
+// ✅ 4) Load traveler profiles
       final profilesData = await _supabase
           .from('profiles')
           .select('id, name, username, avatar_url')
@@ -68,22 +80,44 @@ class _PostLikesScreenState extends State<PostLikesScreen> {
 
       final profiles = List<Map<String, dynamic>>.from(profilesData);
 
-      // ✅ 4) Map profiles by id
       final Map<String, Map<String, dynamic>> profileMap = {
         for (final p in profiles) (p['id'] ?? '').toString(): p,
       };
 
-      // ✅ 5) Merge likes with profiles (keep likes order)
+// ✅ 5) Load business accounts
+      final businessData = await _supabase
+          .from('business_accounts')
+          .select('id, agency_name, logo_url')
+          .inFilter('id', userIds);
+
+      final businesses = List<Map<String, dynamic>>.from(businessData);
+
+      final Map<String, Map<String, dynamic>> businessMap = {
+        for (final b in businesses) (b['id'] ?? '').toString(): b,
+      };
+
+// ✅ 6) Merge likes properly
       final merged = <Map<String, dynamic>>[];
 
       for (final like in likes) {
         final uid = (like['user_id'] ?? '').toString();
-        final profile = profileMap[uid];
+        final user = userMap[uid];
+
+        if (user == null) continue;
+
+        final bool isBusiness =
+            user['user_type'] == 'agency' ||
+                user['user_type'] == 'business';
+
+        final profile = isBusiness
+            ? businessMap[uid]
+            : profileMap[uid];
 
         if (profile != null) {
           merged.add({
             'user_id': uid,
             'profile': profile,
+            'isBusiness': isBusiness,
           });
         }
       }
@@ -121,14 +155,27 @@ class _PostLikesScreenState extends State<PostLikesScreen> {
             itemCount: _likers.length,
             itemBuilder: (_, i) {
               final row = _likers[i];
-              final profile = row['profile'];
+              final Map<String, dynamic>? profile =
+              row['profile'] as Map<String, dynamic>?;
 
-              final String userId = row['user_id'];
-              final String name =
-              (profile?['name'] ?? "Traveler").toString();
-              final String username =
-              (profile?['username'] ?? "").toString();
-              final String? avatar = profile?['avatar_url'];
+              final bool isBusiness =
+                  (row['isBusiness'] as bool?) ?? false;
+
+              final String userId = row['user_id'].toString();
+
+              String name;
+              String username;
+              String? avatar;
+
+              if (isBusiness) {
+                name = profile?['agency_name']?.toString() ?? "Business";
+                username = "";
+                avatar = profile?['logo_url']?.toString();
+              } else {
+                name = profile?['name']?.toString() ?? "Traveler";
+                username = profile?['username']?.toString() ?? "";
+                avatar = profile?['avatar_url']?.toString();
+              }
 
               final bool isMe = myId != null && userId == myId;
 
