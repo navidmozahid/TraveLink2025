@@ -170,7 +170,7 @@ class _HomeScreenState extends State<HomeScreen> {
   // ---------------- POST CARD ----------------
   Widget _buildPost(Map<String, dynamic> post) {
     final currentUser = _supabase.auth.currentUser;
-    final bool isBusinessPost = post['user_type'] == 'agency';
+    final bool isBusinessPost = post['user_type'] == 'business';
 
     // ✅ REQUIRED: correct profile source
     final profile = isBusinessPost ? post['author'] : post['profiles'];
@@ -211,7 +211,7 @@ class _HomeScreenState extends State<HomeScreen> {
               onTap: () {
                 if (isMyPost) return;
 
-                final bool isBusinessPost = post['user_type'] == 'agency';
+                final bool isBusinessPost = post['user_type'] == 'business';
 
                 Navigator.push(
                   context,

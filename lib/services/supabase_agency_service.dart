@@ -28,6 +28,7 @@ class SupabaseAgencyService {
         throw Exception('Invalid agency type');
       }
 
+      // ✅ Only create Auth user
       final AuthResponse authResponse = await supabase.auth.signUp(
         email: email.trim(),
         password: password,
@@ -42,13 +43,15 @@ class SupabaseAgencyService {
         },
       );
 
-      if (authResponse.user == null) {
+      final user = authResponse.user;
+
+      if (user == null) {
         throw Exception("User creation failed");
       }
 
       return {
         'success': true,
-        'user': authResponse.user,
+        'user': user,
         'message':
         'Registration successful! Please check your email for verification.',
       };

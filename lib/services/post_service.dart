@@ -137,7 +137,7 @@ class PostService {
 
     return posts.map<Map<String, dynamic>>((post) {
       final user = userMap[post['user_id']];
-      final bool isBusiness = user?['user_type'] == 'agency';
+      final bool isBusiness = user?['user_type'] == 'business';
 
       return {
         ...post,

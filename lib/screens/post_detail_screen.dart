@@ -75,7 +75,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
     // ✅ FIX: force type safety
     final bool isBusiness =
-        (appUser?['user_type'] as String?) == 'agency';
+        (appUser?['user_type'] as String?) == 'business';
 
     // 🔹 traveler profile
     final Map<String, dynamic>? travelerProfile = !isBusiness
@@ -206,7 +206,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         currentUser != null && _post!['user_id'] == currentUser.id;
 
     final bool isBusiness =
-        (_post!['user_type'] as String?) == 'agency';
+        (_post!['user_type'] as String?) == 'business';
 
     final Map<String, dynamic>? profile =
     isBusiness ? _post!['business_accounts'] : _post!['profiles'];
