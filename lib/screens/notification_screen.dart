@@ -21,6 +21,7 @@ class NotificationScreen extends StatelessWidget {
         stream: supabase
             .from('notifications')
             .stream(primaryKey: ['id'])
+            .eq('user_id', user.id)
             .order('created_at', ascending: false),
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
@@ -63,121 +64,131 @@ class NotificationScreen extends StatelessWidget {
                   final username = profile['name'] ?? 'user';
                   final avatarUrl = profile['avatar_url'];
 
-                  return ListTile(
-                    leading: CircleAvatar(
-                      radius: 22,
-                      backgroundImage: avatarUrl != null
-                          ? NetworkImage(avatarUrl)
-                          : null,
-                      child: avatarUrl == null
-                          ? const Icon(Icons.person)
-                          : null,
-                    ),
-                    title: RichText(
-                      text: TextSpan(
-                        style:
-                        DefaultTextStyle.of(context).style,
-                        children: [
-                          TextSpan(
-                            text: username,
-                            style: const TextStyle(
-                                fontWeight:
-                                FontWeight.bold),
-                          ),
-                          const TextSpan(text: " "),
-                          TextSpan(
-                            text: n['type'] == 'follow'
-                                ? "followed you"
-                                : n['type'] == 'like'
-                                ? "liked your post"
-                                : "commented on your post",
-                          ),
-                        ],
+                  return Dismissible(
+                    key: Key(n['id'].toString()),
+                    direction: DismissDirection.endToStart,
+                    background: Container(
+                      alignment: Alignment.centerRight,
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      color: Colors.red,
+                      child: const Icon(
+                        Icons.delete,
+                        color: Colors.white,
                       ),
                     ),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // ✅ FOLLOW BACK BUTTON
-                        if (n['type'] == 'follow')
-                          FutureBuilder<bool>(
-                            future: supabase
-                                .from('follows')
-                                .select('id')
-                                .eq('follower_id', user.id)
-                                .eq('following_id', senderId)
-                                .maybeSingle()
-                                .then((v) => v != null),
-                            builder:
-                                (context, followSnapshot) {
-                              if (!followSnapshot.hasData ||
-                                  followSnapshot.data ==
-                                      true) {
-                                return const SizedBox();
-                              }
-
-                              return TextButton(
-                                onPressed: () async {
-                                  await supabase
-                                      .from('follows')
-                                      .insert({
-                                    'follower_id': user.id,
-                                    'following_id': senderId,
-                                  });
-
-                                  await supabase
-                                      .from('notifications')
-                                      .update({
-                                    'is_read': true
-                                  })
-                                      .eq('id', n['id']);
-                                },
-                                child: const Text(
-                                    "Follow back"),
-                              );
-                            },
-                          ),
-
-                        if (n['is_read'] != true)
-                          const Padding(
-                            padding:
-                            EdgeInsets.only(left: 6),
-                            child: Icon(Icons.circle,
-                                color: Colors.red,
-                                size: 10),
-                          ),
-                      ],
-                    ),
-                    onTap: () async {
-                      // mark as read
+                    onDismissed: (direction) async {
                       await supabase
                           .from('notifications')
-                          .update({'is_read': true})
+                          .delete()
                           .eq('id', n['id']);
-
-                      // ✅ SAFE NAVIGATION
-                      if (n['type'] == 'follow') {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                OtherProfileScreen(
-                                  userId: senderId,
-                                ),
-                          ),
-                        );
-                      } else if (n['post_id'] != null) {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                PostDetailScreen(
-                                  postId: n['post_id'],
-                                ),
-                          ),
-                        );
-                      }
                     },
+                    child: ListTile(
+                      leading: CircleAvatar(
+                        radius: 22,
+                        backgroundImage:
+                        avatarUrl != null ? NetworkImage(avatarUrl) : null,
+                        child: avatarUrl == null
+                            ? const Icon(Icons.person)
+                            : null,
+                      ),
+                      title: RichText(
+                        text: TextSpan(
+                          style: DefaultTextStyle.of(context).style,
+                          children: [
+                            TextSpan(
+                              text: username,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const TextSpan(text: " "),
+                            TextSpan(
+                              text: n['type'] == 'follow'
+                                  ? "followed you"
+                                  : n['type'] == 'like'
+                                  ? "liked your post"
+                                  : "commented on your post",
+                            ),
+                          ],
+                        ),
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (n['type'] == 'follow')
+                            FutureBuilder(
+                              future: supabase
+                                  .from('follows')
+                                  .select('id')
+                                  .eq('follower_id', user.id)
+                                  .eq('following_id', senderId)
+                                  .maybeSingle(),
+                              builder: (context, snapshot) {
+                                if (snapshot.connectionState ==
+                                    ConnectionState.waiting) {
+                                  return const SizedBox();
+                                }
+
+                                final isFollowing =
+                                    snapshot.data != null;
+
+                                if (isFollowing) {
+                                  return const SizedBox();
+                                }
+
+                                return TextButton(
+                                  onPressed: () async {
+                                    await supabase.from('follows').insert({
+                                      'follower_id': user.id,
+                                      'following_id': senderId,
+                                    });
+
+                                    await supabase
+                                        .from('notifications')
+                                        .update({'is_read': true})
+                                        .eq('id', n['id']);
+                                  },
+                                  child: const Text("Follow back"),
+                                );
+                              },
+                            ),
+
+                          if (n['is_read'] != true)
+                            const Padding(
+                              padding: EdgeInsets.only(left: 6),
+                              child: Icon(
+                                Icons.circle,
+                                color: Colors.red,
+                                size: 10,
+                              ),
+                            ),
+                        ],
+                      ),
+                      onTap: () async {
+                        await supabase
+                            .from('notifications')
+                            .update({'is_read': true})
+                            .eq('id', n['id']);
+
+                        if (n['type'] == 'follow') {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  OtherProfileScreen(userId: senderId),
+                            ),
+                          );
+                        } else if (n['post_id'] != null) {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  PostDetailScreen(postId: n['post_id']),
+                            ),
+                          );
+                        }
+                      },
+                    ),
                   );
                 },
               );

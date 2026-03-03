@@ -169,6 +169,16 @@ class _MessageScreenState extends State<MessageScreen> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
+                trailing: (convo['unread_count'] ?? 0) > 0
+                    ? Container(
+                  width: 10,
+                  height: 10,
+                  decoration: const BoxDecoration(
+                    color: Colors.red,
+                    shape: BoxShape.circle,
+                  ),
+                )
+                    : null,
               ),
             );
           },

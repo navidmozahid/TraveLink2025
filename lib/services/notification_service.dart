@@ -36,4 +36,12 @@ class NotificationService {
         .update({'is_read': true})
         .eq('user_id', userId);
   }
+
+  // DELETE SINGLE NOTIFICATION
+  Future<void> deleteNotification(String notificationId) async {
+    await supabase
+        .from('notifications')
+        .delete()
+        .eq('id', notificationId);
+  }
 }

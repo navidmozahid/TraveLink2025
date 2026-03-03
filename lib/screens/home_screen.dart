@@ -12,7 +12,7 @@ import 'inbox_screen.dart';
 import 'post_likes_screen.dart';
 import 'saved_posts_screen.dart';
 import 'explore_screen.dart';
-import 'business_dashboard_screen.dart';
+import 'dashboard/business_dashboard_screen.dart';
 import 'business_profile_screen.dart';
 
 import '../services/post_service.dart';
@@ -155,6 +155,19 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // ---------------- REALTIME NOTIFICATION COUNT ----------------
+  Stream<int> _unreadMessageCount() {
+    final user = _supabase.auth.currentUser;
+    if (user == null) return const Stream.empty();
+
+    return _supabase
+        .from('messages')
+        .stream(primaryKey: ['id'])
+        .map((rows) => rows
+        .where((m) =>
+    m['sender_id'] != user.id &&
+        m['is_read'] == false)
+        .length);
+  }
   Stream<int> _unreadNotificationCount() {
     final user = _supabase.auth.currentUser;
     if (user == null) return const Stream.empty();
@@ -163,7 +176,9 @@ class _HomeScreenState extends State<HomeScreen> {
         .from('notifications')
         .stream(primaryKey: ['id'])
         .map((rows) => rows
-        .where((n) => n['user_id'] == user.id && n['is_read'] == false)
+        .where((n) =>
+    n['user_id'] == user.id &&
+        n['is_read'] == false)
         .length);
   }
 
@@ -517,6 +532,8 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
     );
+
+
   }
 
   // ---------------- BODY ----------------
@@ -647,9 +664,34 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               label: widget.isBusinessAccount ? "Dashboard" : "Explore",
             ),
-            const BottomNavigationBarItem(
-              icon: Icon(Icons.chat_bubble_outline),
+            BottomNavigationBarItem(
               label: "Messages",
+              icon: StreamBuilder<int>(
+                stream: _unreadMessageCount(),
+                builder: (context, snapshot) {
+                  final count = snapshot.data ?? 0;
+
+                  return Stack(
+                    children: [
+                      const Icon(Icons.chat_bubble_outline),
+
+                      if (count > 0)
+                        Positioned(
+                          right: 0,
+                          top: 0,
+                          child: Container(
+                            width: 10,
+                            height: 10,
+                            decoration: const BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
             ),
             const BottomNavigationBarItem(
               icon: Icon(Icons.person),
