@@ -8,58 +8,58 @@ class WelcomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: Center(
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // Welcome Text
-              const Text(
-                "TraveLink",
-                style: TextStyle(
-                  color: Colors.black,
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
-                ),
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage("assets/Travel (Poster).png"),
+            fit: BoxFit.cover,
+            alignment: Alignment.topCenter,
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+
+            // App Name
+            const Text(
+              "TraveLink",
+              style: TextStyle(
+                fontSize: 36,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+                letterSpacing: 2,
+              ),
+            ),
+
+            const SizedBox(height: 10),
+
+            // Tagline
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 40),
+              child: Text(
+                "Discover places, share journeys, and connect with travelers around the world.",
                 textAlign: TextAlign.center,
-              ),
-
-              const SizedBox(height: 16),
-
-              // Traveler Image
-              Image.asset(
-                "assets/homepage.jpg",
-                width: 260,
-                height: 340,
-              ),
-
-              const SizedBox(height: 24),
-
-              // App Description
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 20),
-                child: Text(
-                  "Adventure awaits! Travel far, meet new souls, and make unforgettable memories.",
-                  style: TextStyle(
-                    color: Colors.black,
-                    fontSize: 16,
-                  ),
-                  textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.white,
                 ),
               ),
+            ),
 
-              const SizedBox(height: 24),
+            const SizedBox(height: 40),
 
-              // Get Started Button
-              ElevatedButton(
+            // Get Started Button
+            Padding(
+              padding: const EdgeInsets.only(bottom: 80),
+              child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF007AFF),
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
                   elevation: 6,
                 ),
                 onPressed: () {
-                  // use backend service to navigate
                   NavigationService.navigateTo(
                     context,
                     const LoginScreen(),
@@ -67,11 +67,14 @@ class WelcomeScreen extends StatelessWidget {
                 },
                 child: const Text(
                   "Get Started",
-                  style: TextStyle(fontSize: 18, color: Colors.white),
+                  style: TextStyle(
+                    fontSize: 18,
+                    color: Colors.white,
+                  ),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

@@ -7,7 +7,7 @@
 
 
     <application
-        android:label="travelink"
+        android:label="TraveLink"
         android:icon="@mipmap/ic_launcher">
 
         <!-- ✅ GOOGLE MAPS API KEY -->
