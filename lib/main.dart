@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'screens/root_screen.dart';
 
@@ -9,6 +10,9 @@ Future<void> main() async {
     url: 'https://qbagkblowxkrjptwbjia.supabase.co',
     anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFiYWdrYmxvd3hrcmpwdHdiamlhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg3OTY0ODEsImV4cCI6MjA3NDM3MjQ4MX0.tuZLYuBqe7AnOP4d7iTI8PQW7lOZLQ5bhkNkL8Abzi8',
   );
+
+  Stripe.publishableKey = 'pk_test_51T67Q5Qp6RK9fuHDtCJ1IgBdUM7KL46fR4HWtss7zs1ebeSzCTKTMJHVndSAAggxunnUwJNPH3OpW8RxzhJp3Kl100PyNwINjB';
+  await Stripe.instance.applySettings();
 
   runApp(const MyApp());
 }
@@ -23,7 +27,7 @@ class MyApp extends StatelessWidget {
     const bg = Color(0xFFF8FAFC); // ✅ clean background
 
     return MaterialApp(
-      title: 'TraveLink', // Changed from XplorerHub
+      title: 'TraveLink',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,

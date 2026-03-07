@@ -10,10 +10,6 @@ class SupabaseService {
   final ImagePicker _picker = ImagePicker();
   final Uuid _uuid = const Uuid();
 
-  // ======================================================
-  // AUTH
-  // ======================================================
-
   /// TRAVELER SIGN UP
   Future<void> signUpTraveler({
     required String email,
@@ -59,10 +55,6 @@ class SupabaseService {
   User? getCurrentUser() {
     return client.auth.currentUser;
   }
-
-  // ======================================================
-  // PROFILE
-  // ======================================================
 
   /// GET CURRENT PROFILE
   Future<Map<String, dynamic>?> getMyProfile() async {
@@ -131,10 +123,6 @@ class SupabaseService {
     }
   }
 
-  // ======================================================
-  // AVATAR IMAGE UPLOAD
-  // ======================================================
-
   /// PICK IMAGE FROM GALLERY + UPLOAD TO STORAGE
   Future<String?> uploadAvatarFromGallery() async {
     final user = client.auth.currentUser;
@@ -170,10 +158,6 @@ class SupabaseService {
 
     return avatarUrl;
   }
-
-  // ======================================================
-  // PASSWORD
-  // ======================================================
 
   /// RESET PASSWORD
   Future<void> resetPassword(String email) async {
