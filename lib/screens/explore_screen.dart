@@ -5,14 +5,10 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';
+import 'package:travelink/screens/event_group/event_group_screen.dart';
+import 'package:travelink/screens/explore/explore_category_screen.dart';
 
 import 'destination_map_screen.dart';
-
-// ✅ NEW service pages
-import 'hotels_offers_screen.dart';
-import 'car_rentals_offers_screen.dart';
-import 'travel_agencies_offers_screen.dart';
-import 'ticket_agencies_offers_screen.dart';
 import 'travel_experiences_screen.dart';
 import 'emergency_help_screen.dart';
 
@@ -420,7 +416,10 @@ class _ExploreScreenState extends State<ExploreScreen>
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => const HotelsOffersScreen(),
+                                builder: (_) => const ExploreCategoryScreen(
+                                  category: 'hotel_booking',
+                                  title: 'Hotel Guide',
+                                ),
                               ),
                             );
                           },
@@ -432,8 +431,10 @@ class _ExploreScreenState extends State<ExploreScreen>
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) =>
-                                const CarRentalsOffersScreen(),
+                                builder: (_) => const ExploreCategoryScreen(
+                                  category: 'car_rental',
+                                  title: 'Car Rental',
+                                ),
                               ),
                             );
                           },
@@ -445,8 +446,10 @@ class _ExploreScreenState extends State<ExploreScreen>
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) =>
-                                const TravelAgenciesOffersScreen(),
+                                builder: (_) => const ExploreCategoryScreen(
+                                  category: 'travel_agency',
+                                  title: 'Travel',
+                                ),
                               ),
                             );
                           },
@@ -458,8 +461,10 @@ class _ExploreScreenState extends State<ExploreScreen>
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) =>
-                                const TicketAgenciesOffersScreen(),
+                                builder: (_) => const ExploreCategoryScreen(
+                                  category: 'flight_booking',
+                                  title: 'Tickets',
+                                ),
                               ),
                             );
                           },
@@ -469,6 +474,19 @@ class _ExploreScreenState extends State<ExploreScreen>
 
                     const SizedBox(height: 14),
 
+                    _buildBigButton(
+                      icon: Icons.card_travel,
+                      title: "My Events",
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const EventGroupsScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 10),
                     _buildBigButton(
                       icon: Icons.emoji_events_outlined,
                       title: "Travel Experiences",

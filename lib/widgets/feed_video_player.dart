@@ -5,12 +5,14 @@ class FeedVideoPlayer extends StatefulWidget {
   final String videoUrl;
   final bool autoPlay;
   final bool showMuteButton;
+  final bool isActive;
 
   const FeedVideoPlayer({
     super.key,
     required this.videoUrl,
     this.autoPlay = true,
     this.showMuteButton = true,
+    this.isActive = true,
   });
 
   @override
@@ -26,6 +28,22 @@ class _FeedVideoPlayerState extends State<FeedVideoPlayer> {
   void initState() {
     super.initState();
     _initVideo();
+  }
+  @override
+  void didUpdateWidget(covariant FeedVideoPlayer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (!_initialized) return;
+
+    if (widget.isActive) {
+      if (!_controller.value.isPlaying) {
+        _controller.play();
+      }
+    } else {
+      if (_controller.value.isPlaying) {
+        _controller.pause();
+      }
+    }
   }
 
   Future<void> _initVideo() async {

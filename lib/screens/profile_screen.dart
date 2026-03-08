@@ -340,8 +340,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 children: interests
                     .map<Widget>(
                       (i) => Chip(
-                    label: Text(i.toString()),
-                    backgroundColor: Color(0xFF475569),
+                        label: Text(
+                          i.toString(),
+                          style: const TextStyle(color: Colors.black),
+                        ),
+                    backgroundColor: Color(0xFFFFFFFF),
                   ),
                 )
                     .toList(),

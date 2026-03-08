@@ -44,6 +44,18 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen>
   Map<String, dynamic>? _business;
   List<Map<String, dynamic>> _posts = [];
 
+  bool _isVideoUrl(String url) {
+    final u = url.toLowerCase();
+    return u.endsWith('.mp4') ||
+        u.endsWith('.mov') ||
+        u.endsWith('.avi') ||
+        u.endsWith('.mkv') ||
+        u.contains('.mp4?') ||
+        u.contains('.mov?') ||
+        u.contains('.avi?') ||
+        u.contains('.mkv?');
+  }
+
   late TabController _tabController;
 
   @override
@@ -472,9 +484,40 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen>
                               ),
                             );
                           },
-                          child: Image.network(
-                            url,
-                            fit: BoxFit.cover,
+                          child: Builder(
+                            builder: (_) {
+                              final String mediaUrl = (url ?? '').toString();
+
+                              if (mediaUrl.isEmpty) {
+                                return Container(color: const Color(0xFF475569));
+                              }
+
+                              if (_isVideoUrl(mediaUrl)) {
+                                return Container(
+                                  color: Colors.black,
+                                  child: const Center(
+                                    child: Icon(
+                                      Icons.videocam,
+                                      color: Colors.white,
+                                      size: 28,
+                                    ),
+                                  ),
+                                );
+                              }
+
+                              return Image.network(
+                                mediaUrl,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) {
+                                  return Container(
+                                    color: const Color(0xFF475569),
+                                    child: const Center(
+                                      child: Icon(Icons.broken_image),
+                                    ),
+                                  );
+                                },
+                              );
+                            },
                           ),
                         );
                       },

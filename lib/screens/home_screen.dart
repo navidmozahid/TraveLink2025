@@ -14,6 +14,7 @@ import 'saved_posts_screen.dart';
 import 'explore_screen.dart';
 import 'dashboard/business_dashboard_screen.dart';
 import 'business_profile_screen.dart';
+import 'search_screen.dart';
 
 import '../services/post_service.dart';
 import '../services/follow_service.dart';
@@ -41,6 +42,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final FollowService _followService = FollowService();
   final LikeService _likeService = LikeService();
   final CommentService _commentService = CommentService();
+  final ScrollController _feedScrollController = ScrollController();
 
   bool _loading = true;
   int _currentIndex = 0;
@@ -312,13 +314,12 @@ class _HomeScreenState extends State<HomeScreen> {
                         final bool isActive =
                             activeIndex == i && _currentIndex == 0;
 
-                        return Stack(
-                          children: [
-                            FeedVideoPlayer(
-                              key: ValueKey(media['media_url']),
-                              videoUrl: media['media_url'],
-                            ),
-                          ],
+                        return IgnorePointer(
+                          child: FeedVideoPlayer(
+                            key: ValueKey(media['media_url']),
+                            videoUrl: media['media_url'],
+                            isActive: isActive,
+                          ),
                         );
                       }
 
@@ -328,6 +329,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       );
                     },
                   ),
+                  if (mediaList.length > 1)
                   Positioned(
                     bottom: 8,
                     child: Row(
@@ -545,24 +547,27 @@ class _HomeScreenState extends State<HomeScreen> {
             : SafeArea(
           top: false,
           child: ListView.builder(
+            controller: _feedScrollController,
             padding:
             const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
             itemCount: _posts.length,
             itemBuilder: (_, i) => _buildPost(_posts[i]),
           ),
         );
-
       case 1:
+        return const SearchScreen();
+
+      case 2:
       // ✅ Traveler -> Explore
       // ✅ Business -> Dashboard
         return widget.isBusinessAccount
             ? const BusinessDashboardScreen()
             : const ExploreScreen();
 
-      case 2:
+      case 3:
         return const InboxScreen();
 
-      case 3:
+      case 4:
         return widget.isBusinessAccount
             ? BusinessProfileScreen(
           businessId:
@@ -622,7 +627,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 );
               },
             ),
-          if (_currentIndex == 3)
+          if (_currentIndex == 4)
             IconButton(
               icon: const Icon(Icons.settings),
               onPressed: _openSettings,
@@ -630,18 +635,20 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
       body: _buildBody(),
-      floatingActionButton: FloatingActionButton(
-        child: const Icon(Icons.add),
-        onPressed: () async {
-          await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => const CreatePostScreen(),
-            ),
-          );
-          _loadPosts();
-        },
-      ),
+        floatingActionButton: (_currentIndex == 0 || _currentIndex == 4)
+            ? FloatingActionButton(
+          child: const Icon(Icons.add),
+          onPressed: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const CreatePostScreen(),
+              ),
+            );
+            _loadPosts();
+          },
+        )
+            : null,
       bottomNavigationBar: Container(
         decoration: const BoxDecoration(
           border: Border(top: BorderSide(color: Color(0xFFE5E7EB))),
@@ -650,11 +657,25 @@ class _HomeScreenState extends State<HomeScreen> {
         child: BottomNavigationBar(
           currentIndex: _currentIndex,
           type: BottomNavigationBarType.fixed,
-          onTap: (i) => setState(() => _currentIndex = i),
+          onTap: (i) {
+            if (i == 0 && _currentIndex == 0) {
+              _feedScrollController.animateTo(
+                0,
+                duration: const Duration(milliseconds: 400),
+                curve: Curves.easeOut,
+              );
+            }
+
+            setState(() => _currentIndex = i);
+          },
           items: [
             const BottomNavigationBarItem(
               icon: Icon(Icons.home),
               label: "Home",
+            ),
+            const BottomNavigationBarItem(
+              icon: Icon(Icons.search),
+              label: "Search",
             ),
             BottomNavigationBarItem(
               icon: Icon(
